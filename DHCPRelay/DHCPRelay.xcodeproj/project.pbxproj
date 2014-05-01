@@ -8,9 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		D3A609EC1912739500E4587F /* DHCPRelay.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3A609EB1912739500E4587F /* DHCPRelay.1 */; };
-		D3A60B67191273A800E4587F /* BerkeleyTCPClientDemo.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F5191273A700E4587F /* BerkeleyTCPClientDemo.c */; };
-		D3A60B68191273A800E4587F /* BerkeleyTCPServerDemo.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F6191273A700E4587F /* BerkeleyTCPServerDemo.c */; };
-		D3A60B69191273A800E4587F /* BerkeleyUDPClientDemo.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F7191273A700E4587F /* BerkeleyUDPClientDemo.c */; };
 		D3A60B6A191273A800E4587F /* Bootloader_Main.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F8191273A700E4587F /* Bootloader_Main.c */; };
 		D3A60B6B191273A800E4587F /* CustomSNMPApp.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F9191273A700E4587F /* CustomSNMPApp.c */; };
 		D3A60B6C191273A800E4587F /* GenericTCPClient.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609FA191273A700E4587F /* GenericTCPClient.c */; };
@@ -170,9 +167,6 @@
 		D3A609F2191273A700E4587F /* #Maintest.c# */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "#Maintest.c#"; sourceTree = "<group>"; };
 		D3A609F3191273A700E4587F /* #missing# */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "#missing#"; sourceTree = "<group>"; };
 		D3A609F4191273A700E4587F /* #myclock.c# */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "#myclock.c#"; sourceTree = "<group>"; };
-		D3A609F5191273A700E4587F /* BerkeleyTCPClientDemo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = BerkeleyTCPClientDemo.c; sourceTree = "<group>"; };
-		D3A609F6191273A700E4587F /* BerkeleyTCPServerDemo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = BerkeleyTCPServerDemo.c; sourceTree = "<group>"; };
-		D3A609F7191273A700E4587F /* BerkeleyUDPClientDemo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = BerkeleyUDPClientDemo.c; sourceTree = "<group>"; };
 		D3A609F8191273A700E4587F /* Bootloader_Main.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = Bootloader_Main.c; sourceTree = "<group>"; };
 		D3A609F9191273A700E4587F /* CustomSNMPApp.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = CustomSNMPApp.c; sourceTree = "<group>"; };
 		D3A609FA191273A700E4587F /* GenericTCPClient.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = GenericTCPClient.c; sourceTree = "<group>"; };
@@ -578,9 +572,6 @@
 				D3A609F2191273A700E4587F /* #Maintest.c# */,
 				D3A609F3191273A700E4587F /* #missing# */,
 				D3A609F4191273A700E4587F /* #myclock.c# */,
-				D3A609F5191273A700E4587F /* BerkeleyTCPClientDemo.c */,
-				D3A609F6191273A700E4587F /* BerkeleyTCPServerDemo.c */,
-				D3A609F7191273A700E4587F /* BerkeleyUDPClientDemo.c */,
 				D3A609F8191273A700E4587F /* Bootloader_Main.c */,
 				D3A609F9191273A700E4587F /* CustomSNMPApp.c */,
 				D3A609FA191273A700E4587F /* GenericTCPClient.c */,
@@ -1195,7 +1186,6 @@
 				D3A60BF3191273A800E4587F /* UARTConfig.c in Sources */,
 				D3A60BAE191273A800E4587F /* Delay.c in Sources */,
 				D3A60B98191273A800E4587F /* StackTsk.asm in Sources */,
-				D3A60B69191273A800E4587F /* BerkeleyUDPClientDemo.c in Sources */,
 				D3A60B6A191273A800E4587F /* Bootloader_Main.c in Sources */,
 				D3A60BCC191273A800E4587F /* SPIEEPROM.c in Sources */,
 				D3A60BED191273A800E4587F /* ZGHWReset.c in Sources */,
@@ -1206,7 +1196,6 @@
 				D3A60B88191273A800E4587F /* Hashes.asm in Sources */,
 				D3A60B7C191273A800E4587F /* Delay.asm in Sources */,
 				D3A60B6B191273A800E4587F /* CustomSNMPApp.c in Sources */,
-				D3A60B68191273A800E4587F /* BerkeleyTCPServerDemo.c in Sources */,
 				D3A60B70191273A800E4587F /* MainDemoV1.c in Sources */,
 				D3A60BC8191273A800E4587F /* SMTP.c in Sources */,
 				D3A60B82191273A800E4587F /* DNS.asm in Sources */,
@@ -1217,7 +1206,6 @@
 				D3A60B84191273A800E4587F /* ENC28J60.asm in Sources */,
 				D3A60B7E191273A800E4587F /* DHCP.asm in Sources */,
 				D3A60B94191273A800E4587F /* NBNS.asm in Sources */,
-				D3A60B67191273A800E4587F /* BerkeleyTCPClientDemo.c in Sources */,
 				D3A60BD2191273A800E4587F /* TCPPerformanceTest.c in Sources */,
 				D3A60BE4191273A800E4587F /* ZGConsoleIwpriv.c in Sources */,
 				D3A60BB9191273A800E4587F /* FileSystem.c in Sources */,
@@ -1397,6 +1385,7 @@
 				D3A609F11912739500E4587F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
 	};
