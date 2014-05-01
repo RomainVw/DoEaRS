@@ -60,7 +60,7 @@ transition* t13[1] = {&t13_1};
 
 char action_E13(void) {
 
-
+remove_and_prepare_unack_forward();
 }
 
 etat E13 = {&E1, 0x03, 0, t13, 0x01, 0, 0, action_E13, 0};
@@ -94,7 +94,7 @@ transition* t12[1] = {&t12_1};
 
 char action_E12(void) {
 
-
+prepare_decline_forward();
 }
 
 etat E12 = {&E1, 0x03, 0, t12, 0x01, 0, 0, action_E12, 0};
@@ -167,7 +167,7 @@ transition* t7[2] = {&t7_1, &t7_2};
 
 char action_E7(void) {
 
-
+look_into_table();
 }
 
 etat E7 = {&E1, 0x03, 0, t7, 0x02, 0, 0, action_E7, 0};
@@ -216,7 +216,7 @@ transition* t15[1] = {&t15_1};
 
 char action_E15(void) {
 
-
+prepare_ack_send_and_update_timers();
 }
 
 etat E15 = {&E1, 0x03, 0, t15, 0x01, 0, 0, action_E15, 0};
@@ -234,7 +234,7 @@ transition* t6[1] = {&t6_1};
 
 char action_E6(void) {
 
-
+store_informations_and_prepare_ack_send();
 }
 
 etat E6 = {&E1, 0x03, 0, t6, 0x01, 0, 0, action_E6, 0};
@@ -276,7 +276,7 @@ transition* t8[2] = {&t8_1, &t8_2};
 
 char action_E8(void) {
 
-
+look_into_table();
 }
 
 etat E8 = {&E1, 0x03, 0, t8, 0x02, 0, 0, action_E8, 0};
@@ -353,7 +353,7 @@ transition* t17[1] = {&t17_1};
 
 char action_E17(void) {
 
-
+prepare_request_forward();
 }
 
 etat E17 = {&E1, 0x03, 0, t17, 0x01, 0, 0, action_E17, 0};
@@ -399,7 +399,7 @@ transition* t18[1] = {&t18_1};
 
 char action_E18(void) {
 
-
+update_informations();
 }
 
 etat E18 = {&E1, 0x03, 0, t18, 0x01, 0, 0, action_E18, 0};
@@ -409,23 +409,23 @@ etat E18 = {&E1, 0x03, 0, t18, 0x01, 0, 0, action_E18, 0};
 
 void updateEvents(void) {
 /* bit 5:  */
-if (0) bitset(EVENEMENTS1,4); else bitclr(EVENEMENTS1,4);
+if (request()) bitset(EVENEMENTS1,4); else bitclr(EVENEMENTS1,4);
 /* bit 8:  */
-if (0) bitset(EVENEMENTS1,7); else bitclr(EVENEMENTS1,7);
+if (discover()) bitset(EVENEMENTS1,7); else bitclr(EVENEMENTS1,7);
 /* bit 1:  */
-if (0) bitset(EVENEMENTS1,0); else bitclr(EVENEMENTS1,0);
+if (new_client()) bitset(EVENEMENTS1,0); else bitclr(EVENEMENTS1,0);
 /* bit 2:  */
-if (0) bitset(EVENEMENTS1,1); else bitclr(EVENEMENTS1,1);
+if (timer_expires()) bitset(EVENEMENTS1,1); else bitclr(EVENEMENTS1,1);
 /* bit 4:  */
-if (0) bitset(EVENEMENTS1,3); else bitclr(EVENEMENTS1,3);
+if (ack()) bitset(EVENEMENTS1,3); else bitclr(EVENEMENTS1,3);
 /* bit 10:  */
 if (0) bitset(EVENEMENTS1,9); else bitclr(EVENEMENTS1,9);
 /* bit 6:  */
-if (0) bitset(EVENEMENTS1,5); else bitclr(EVENEMENTS1,5);
+if (offer()) bitset(EVENEMENTS1,5); else bitclr(EVENEMENTS1,5);
 /* bit 7:  */
-if (0) bitset(EVENEMENTS1,6); else bitclr(EVENEMENTS1,6);
+if (decline()) bitset(EVENEMENTS1,6); else bitclr(EVENEMENTS1,6);
 /* bit 9:  */
-if (0) bitset(EVENEMENTS1,8); else bitclr(EVENEMENTS1,8);
+if (unack()) bitset(EVENEMENTS1,8); else bitclr(EVENEMENTS1,8);
 /* bit 3:  */
 if (0) bitset(EVENEMENTS1,2); else bitclr(EVENEMENTS1,2);
 }
