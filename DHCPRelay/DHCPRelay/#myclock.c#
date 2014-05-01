@@ -1,0 +1,15 @@
+
+	// Enable PLL but disable pre and postscalers: the primary oscillator
+        // runs at the speed of the 25MHz extarnal quartz
+	OSCTUNE = 0x40;
+
+	// Switch to primary oscillator mode, 
+        // regardless of if the config fuses tell us to start operating using 
+        // the the internal RC
+	// The external clock must be running and must be 25MHz for the 
+	// Ethernet module and thus this Ethernet bootloader to operate.
+        if(OSCCONbits.IDLEN) //IDLEN = 0x80; 0x02 selects the primary clock
+		OSCCON = 0x82;
+	else
+		OSCCON = 0x02;
+
