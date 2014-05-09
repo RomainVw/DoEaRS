@@ -158,8 +158,8 @@ int main(void)
         // write the new IP address to the LCD display, UART, and Announce
         // service
 		
-		ProcessMessageTask();
-		CheckingTimerTask();
+		//ProcessMessageTask();
+		//CheckingTimerTask();
 		
 		
 		
