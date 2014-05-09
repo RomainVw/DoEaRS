@@ -164,8 +164,8 @@ int main(void)
         // write the new IP address to the LCD display, UART, and Announce
         // service
 		
-		ProcessMessageTask();
-		CheckingTimerTask();
+		//ProcessMessageTask();
+		//CheckingTimerTask();
 		
 		
 		
@@ -336,7 +336,7 @@ static void InitializeBoard(void)
 
 static void InitAppConfig(void)
 {
-	AppConfig.Flags.bIsDHCPEnabled = TRUE;
+	AppConfig.Flags.bIsDHCPEnabled = FALSE;
 	AppConfig.Flags.bInConfigMode = TRUE;
 	
 	//ML using sdcc (MPLAB has a trick to generate serial numbers)
