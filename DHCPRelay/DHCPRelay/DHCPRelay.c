@@ -106,12 +106,6 @@ void main(void)
 int main(void)
 #endif
 {
-	static TICK t = 0;
-	TICK nt = 0;  //TICK is DWORD, thus 32 bits
-	BYTE loopctr = 0;  //ML Debugging
-	WORD lloopctr = 14; //ML Debugging
-	
-	static DWORD dwLastIP = 0;
 	
     // Initialize interrupts and application specific hardware
     InitializeBoard();
@@ -336,7 +330,7 @@ static void InitializeBoard(void)
 
 static void InitAppConfig(void)
 {
-	AppConfig.Flags.bIsDHCPEnabled = TRUE;
+	AppConfig.Flags.bIsDHCPEnabled = FALSE;
 	AppConfig.Flags.bInConfigMode = TRUE;
 	
 	//ML using sdcc (MPLAB has a trick to generate serial numbers)
