@@ -1,1 +1,6 @@
 UserInterfaceState.xcuserstate
+*.cod
+*.lst
+*.o
+*.asm
+*.xcuserstate

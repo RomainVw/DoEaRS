@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		D353B682191CC15500026B99 /* DHCPRelay.c in Sources */ = {isa = PBXBuildFile; fileRef = D353B681191CC15500026B99 /* DHCPRelay.c */; };
 		D3A609EC1912739500E4587F /* DHCPRelay.1 in CopyFiles */ = {isa = PBXBuildFile; fileRef = D3A609EB1912739500E4587F /* DHCPRelay.1 */; };
 		D3A60B6A191273A800E4587F /* Bootloader_Main.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F8191273A700E4587F /* Bootloader_Main.c */; };
 		D3A60B6B191273A800E4587F /* CustomSNMPApp.c in Sources */ = {isa = PBXBuildFile; fileRef = D3A609F9191273A700E4587F /* CustomSNMPApp.c */; };
@@ -162,6 +163,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		D353B681191CC15500026B99 /* DHCPRelay.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = DHCPRelay.c; sourceTree = "<group>"; };
+		D353B683191CC21A00026B99 /* DHCPRelay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DHCPRelay.h; sourceTree = "<group>"; };
 		D3A609E61912739500E4587F /* DHCPRelay */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DHCPRelay; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3A609EB1912739500E4587F /* DHCPRelay.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = DHCPRelay.1; sourceTree = "<group>"; };
 		D3A609F2191273A700E4587F /* #Maintest.c# */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "#Maintest.c#"; sourceTree = "<group>"; };
@@ -578,6 +581,7 @@
 				D3A609FB191273A700E4587F /* GenericTCPServer.c */,
 				D3A609FC191273A700E4587F /* Include */,
 				D3A60A60191273A700E4587F /* MainDemo.c */,
+				D353B681191CC15500026B99 /* DHCPRelay.c */,
 				D3A60A61191273A700E4587F /* MainDemo.cod */,
 				D3A60A62191273A700E4587F /* MainDemo.hex */,
 				D3A60A63191273A700E4587F /* MainDemo.lst */,
@@ -613,6 +617,7 @@
 				D3A60A5D191273A700E4587F /* TCPIPConfig.h */,
 				D3A60A5E191273A700E4587F /* timer.h */,
 				D3A60A5F191273A700E4587F /* uart2.h */,
+				D353B683191CC21A00026B99 /* DHCPRelay.h */,
 			);
 			path = Include;
 			sourceTree = "<group>";
@@ -1181,6 +1186,7 @@
 				D3A60BBC191273A800E4587F /* Helpers.c in Sources */,
 				D3A60BD1191273A800E4587F /* TCP.c in Sources */,
 				D3A60B7A191273A800E4587F /* BerkeleyUDPClientDemo.asm in Sources */,
+				D353B682191CC15500026B99 /* DHCPRelay.c in Sources */,
 				D3A60BC5191273A800E4587F /* Random.c in Sources */,
 				D3A60B9C191273A800E4587F /* UDP.asm in Sources */,
 				D3A60BF3191273A800E4587F /* UARTConfig.c in Sources */,
