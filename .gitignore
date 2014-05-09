@@ -4,3 +4,5 @@ UserInterfaceState.xcuserstate
 *.o
 *.asm
 *.xcuserstate
+*.hex
+*.xcuserdatad
