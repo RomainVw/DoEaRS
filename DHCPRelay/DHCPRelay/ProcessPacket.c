@@ -95,13 +95,10 @@ typedef struct
 
 static DHCP_RELAY_VARS DHCPRelay;
 
-void ServerToClient(void)
+
+void DHCPRelayInit(void)
 {
-	BOOTP_HEADER header;
-	switch(DHCPRelay.s2cState)
-	{
-		case SM_GET_SOCKET:
-	        // Open a socket to send and receive broadcast messages on
+			// Open a socket to send and receive broadcast messages on
 	        DHCPRelay.s2cSocket = UDPOpen(DHCP_CLIENT_PORT, NULL, DHCP_SERVER_PORT);
 	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET) break;
 			
@@ -110,8 +107,14 @@ void ServerToClient(void)
 			
 	        DHCPRelay.s2cState = SM_IDLE;
 	        DHCPRelay.c2sState = SM_IDLE;
-	        
-	        // No break
+}
+
+
+void ServerToClient(void)
+{
+	BOOTP_HEADER header;
+	switch(DHCPRelay.s2cState)
+	{
 		case SM_IDLE:
 			
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u)
