@@ -87,6 +87,7 @@
 #define DHCP_ROUTER                     (3u)	// DHCP_ROUTER Type
 #define DHCP_DNS						(6u)	// DHCP_DNS Type
 #define DHCP_HOST_NAME					(12u)	// DHCP_HOST_NAME Type
+#define DHCP_BROADCAST_ADRESS			(28u)	// DHCP Broadcast Address Option
 #define DHCP_IP_LEASE_TIME              (51u)	// DHCP_IP_LEASE_TIME Type
 #define DHCP_END_OPTION                 (255u)	// DHCP_END_OPTION Type
 

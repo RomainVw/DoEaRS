@@ -92,6 +92,7 @@ typedef struct
 	
 	IP_ADDR my_ip;
 	IP_ADDR router_ip;
+	IP_ADDR broadcast_adress;
 
 	DHCP_CONTROL_BLOCK	DCB[DHCP_MAX_LEASES];
 } DHCP_RELAY_VARS;
@@ -154,7 +155,7 @@ void ServerToClient(void)
 			
 			//CHECKING TYPE !
 			BOOL end = FALSE;
-			
+			BOOL broadcastOptionPresent = FALSE;
 			BYTE type;
 			BYTE op, len;
 			BYTE *cont;
@@ -200,6 +201,14 @@ void ServerToClient(void)
 						len = 4;
 						memcpy(cont, &DHCPRelay.router_ip, 4);
 						
+					case DHCP_BROADCAST_ADRESS:
+						if (len == 4u) {
+							memcpy(cont, &DHCPRelay.broadcast_adress, 4);
+							broadcastOptionPresent = TRUE;
+						}
+						else
+							UDPDiscard();
+						
 					case DHCP_END_OPTION:
 						end = TRUE;
 						break;
@@ -216,6 +225,15 @@ void ServerToClient(void)
 				options[i] = option;
  				i++;
 			} while (!end);
+			
+			if (!broadcastOptionPresent) {
+				DHCP_OPTION option;
+				option.type = DHCP_BROADCAST_ADRESS;
+				option.len = 4;
+				cont = (BYTE *) calloc(option.len, sizeof(BYTE));
+				memcpy(cont, &DHCPRelay.broadcast_adress, 4);
+				options[++i] = option;
+			}
 			
 			switch (type) {
 				case DHCP_OFFER_MESSAGE:
@@ -262,7 +280,7 @@ void ServerToClient(void)
 			break;
 		case SM_SEND:
 			// Ensure transmitter is ready to accept data
-			if(UDPIsPutReady(DHCPRelay.s2cSocket) < 300u) break; //TODO CHANGE TO OTHER SOCKET
+			if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
 			UDPPutArray((BYTE*)&DHCPRelay.s2c_message.header, sizeof(BOOTP_HEADER));
 			UDPPutArray(DHCPRelay.s2c_message.mac_offset, 10);
 			UDPPutArray(DHCPRelay.s2c_message.sname, sizeof(DHCPRelay.s2c_message.sname));
@@ -274,6 +292,13 @@ void ServerToClient(void)
 							DHCPRelay.s2c_message.options[i].len);
 			}
 			UDPFlush();
+			
+			//FREEEEE
+			
+			for (i = 0; i < DHCPRelay.s2c_message.nb_options; i++) {
+				free(DHCPRelay.s2c_message.options[i].content);
+				free(DHCPRelay.s2c_message.options);
+			}
 			
 			break;
 	}
