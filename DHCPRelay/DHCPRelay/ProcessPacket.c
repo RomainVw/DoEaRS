@@ -31,19 +31,19 @@ typedef enum
 	SM_REQUEST_FROM_KNOWN,
 	SM_REQUEST_FROM_UNKNOWN,
 	SM_PROCESS_DECLINE
-} C2SSTATE = SM_IDLE;
+} C2SSTATE;
 
 typedef enum
 {
-	SM_IDLE = 0,
-	SM_CHECKING_TYPE,
+	SM_IDLE_S = 0,
+	SM_CHECKING_TYPE_S,
 	SM_PROCESS_OFFER,
 	SM_PROCESS_ACK,
 	SM_PROCESS_NACK,
 	SM_ACK_FROM_UNKNOWN,
 	SM_ACK_FROM_KNOWN,
 	SM_SEND
-} S2CSTATE = SM_IDLE;;
+} S2CSTATE;
 
 typedef struct _DHCP_CONTROL_BLOCK
 {
@@ -89,6 +89,9 @@ typedef struct
 
 	DHCP_MESSAGE s2c_message;
 	DHCP_MESSAGE c2s_message;
+	
+	IP_ADDR my_ip;
+	IP_ADDR router_ip;
 
 	DHCP_CONTROL_BLOCK	DCB[DHCP_MAX_LEASES];
 } DHCP_RELAY_VARS;
@@ -108,26 +111,26 @@ void ServerToClient(void)
 			DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
 	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET) break;
 			
-	        DHCPRelay.s2cState = SM_IDLE;
+	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
 	        
 	        // No break
-		case SM_IDLE:
+		case SM_IDLE_S:
 			
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u)
 			{
-				DHCPRelay.s2cState = SM_CHECKING_TYPE;
+				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
 			}
 			else break;
 			
-		case SM_CHECKING_TYPE:
+		case SM_CHECKING_TYPE_S:
 			
 			// Retrieve the BOOTP header
 			UDPGetArray((BYTE *)&header, sizeof(BOOTP_HEADER));
 			//Must be a server to client message !
 			if(header.MessageType != BOOT_REPLY)
 				break;
-			
+			header.RelayAgentIP = DHCPRelay.my_ip;
 
 			int i;
 			// Throw away part of client hardware address,
@@ -190,6 +193,9 @@ void ServerToClient(void)
 						}
 						else
 							UDPDiscard(); // Packet not correct
+					case DHCP_ROUTER:
+						len = 4;
+						memcpy(cont, &DHCPRelay.router_ip, 4);
 						
 					case DHCP_END_OPTION:
 						end = TRUE;
@@ -219,7 +225,7 @@ void ServerToClient(void)
 					break;
 				default:
 					//Ignore it
-					DHCPRelay.s2cState = SM_IDLE;
+					DHCPRelay.s2cState = SM_IDLE_S;
 					break;
 			}
 			//Store the packet
