@@ -22,7 +22,7 @@
 #include "Include/MainDemo.h"
 
 #define DHCP_MAX_LEASES					2
-#define LEASE_TIME		300
+#define LEASE_TIME		300ul
 typedef enum
 {
 	SM_GET_SOCKET = 0,
@@ -32,7 +32,8 @@ typedef enum
 	SM_PROCESS_ACK,
 	SM_PROCESS_NACK,
 	SM_ACK_FROM_UNKNOWN,
-	SM_ACK_FROM_KNOWN
+	SM_ACK_FROM_KNOWN,
+	SM_SEND
 } S2CSTATE;
 
 typedef struct _DHCP_CONTROL_BLOCK
@@ -61,6 +62,7 @@ typedef struct
 	BYTE sname[64];
 	BYTE file[128];
 	BYTE magic_cookie[4];
+	UINT nb_options;
 	DHCP_OPTION *options;
 } DHCP_MESSAGE ;
 
@@ -72,7 +74,7 @@ typedef struct
 	
     S2CSTATE	s2cState;	  // DHCP client state machine variable
     //Some variables for relay
-	DHCP_MESSAGE message;
+	DHCP_MESSAGE s2c_message;
 	DHCP_CONTROL_BLOCK	DCB[DHCP_MAX_LEASES];
 } DHCP_RELAY_VARS;
 
@@ -155,6 +157,15 @@ void ServerToClient(void)
 							UDPDiscard(); // Packet not correct
 						break;
 					case DHCP_IP_LEASE_TIME:
+						if ( len == 4u ) {
+							//MODIFY the lease time for the client
+							cont[3] = (LEASE_TIME >>24) & 0xFF;
+							cont[2] = (LEASE_TIME >>16) & 0xFF;
+							cont[1] = (LEASE_TIME >>8) & 0xFF;
+							cont[0] = (LEASE_TIME) & 0xFF;
+						}
+						else
+							UDPDiscard(); // Packet not correct
 						
 					case DHCP_END_OPTION:
 						end = TRUE;
@@ -189,19 +200,20 @@ void ServerToClient(void)
 			}
 			//Store the packet
 			
-			DHCPRelay.message.header = header;
-			memcpy(DHCPRelay.message.mac_offset, macoffset, 10);
-			memcpy(DHCPRelay.message.sname, sname, 64);
-			memcpy(DHCPRelay.message.file, file, 128);
-			DHCPRelay.message.options = options;
+			DHCPRelay.s2c_message.header = header;
+			memcpy(DHCPRelay.s2c_message.mac_offset, macoffset, 10);
+			memcpy(DHCPRelay.s2c_message.sname, sname, 64);
+			memcpy(DHCPRelay.s2c_message.file, file, 128);
+			DHCPRelay.s2c_message.nb_options = i + 1;
+			DHCPRelay.s2c_message.options = options;
 			//Done with the packet
 			UDPDiscard();
 			
 			break;
 			
 		case SM_PROCESS_OFFER:
-			DHCPRelay.message.header.Hops += 1;
-			
+			DHCPRelay.s2c_message.header.Hops += 1;
+			DHCPRelay.s2cState = SM_SEND;
 			break;
 			
 		case SM_PROCESS_ACK:
@@ -214,6 +226,22 @@ void ServerToClient(void)
 			break;
 			
 		case SM_ACK_FROM_KNOWN:
+			break;
+		case SM_SEND:
+			// Ensure transmitter is ready to accept data
+			if(UDPIsPutReady(DHCPRelay.s2cSocket) < 300u) break; //TODO CHANGE TO OTHER SOCKET
+			UDPPutArray((BYTE*)&DHCPRelay.s2c_message.header, sizeof(BOOTP_HEADER));
+			UDPPutArray(DHCPRelay.s2c_message.mac_offset, 10);
+			UDPPutArray(DHCPRelay.s2c_message.sname, sizeof(DHCPRelay.s2c_message.sname));
+			UDPPutArray(DHCPRelay.s2c_message.file, sizeof(DHCPRelay.s2c_message.file));
+			for(i = 0; i < DHCPRelay.s2c_message.nb_options; i++ ) {
+				UDPPut(DHCPRelay.s2c_message.options[i].type);
+				UDPPut(DHCPRelay.s2c_message.options[i].len);
+				UDPPutArray(DHCPRelay.s2c_message.options[i].content,
+							DHCPRelay.s2c_message.options[i].len);
+			}
+			UDPFlush();
+			
 			break;
 	}
 }
