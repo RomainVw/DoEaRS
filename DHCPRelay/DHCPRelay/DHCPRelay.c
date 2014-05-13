@@ -1,428 +1,497 @@
-//
-//  DHCPRelay.c
-//  DHCPRelay
-//
-//  Created by Ludovic Vannoorenberghe on 9/05/14.
-//  Copyright (c) 2014 Ludovic Vannoorenberghe. All rights reserved.
-//
-
-#include <stdio.h>
-
-/*
- * This symbol uniquely defines this file as the main entry point.
- * There should only be one such definition in the entire project,
- * and this file must define the AppConfig variable as described below.
- * The processor configuration will be included in HardwareProfile.h
- * if this symbol is defined.
- */
-#define THIS_INCLUDES_THE_MAIN_FUNCTION
-#define THIS_IS_STACK_APPLICATION
-
-// define the processor we use
+/*********************************************************************
+ *
+ *  Dynamic Host Configuration Protocol (DHCP) Server
+ *  Module for Microchip TCP/IP Stack
+ *	 -Provides automatic IP address, subnet mask, gateway address,
+ *	  DNS server address, and other configuration parameters on DHCP
+ *	  enabled networks.
+ *	 -Reference: RFC 2131, 2132
+ *
+ *********************************************************************
+ * FileName:        DHCPs.c
+ * Dependencies:    UDP, ARP, Tick
+ * Processor:       PIC18, PIC24F, PIC24H, dsPIC30F, dsPIC33F, PIC32
+ * Compiler:        Microchip C32 v1.05 or higher
+ *					Microchip C30 v3.12 or higher
+ *					Microchip C18 v3.30 or higher
+ *					HI-TECH PICC-18 PRO 9.63PL2 or higher
+ * Company:         Microchip Technology, Inc.
+ *
+ * Software License Agreement
+ *
+ * Copyright (C) 2002-2009 Microchip Technology Inc.  All rights
+ * reserved.
+ *
+ * Microchip licenses to you the right to use, modify, copy, and
+ * distribute:
+ * (i)  the Software when embedded on a Microchip microcontroller or
+ *      digital signal controller product ("Device") which is
+ *      integrated into Licensee's product; or
+ * (ii) ONLY the Software driver source files ENC28J60.c, ENC28J60.h,
+ *		ENCX24J600.c and ENCX24J600.h ported to a non-Microchip device
+ *		used in conjunction with a Microchip ethernet controller for
+ *		the sole purpose of interfacing with the ethernet controller.
+ *
+ * You should refer to the license agreement accompanying this
+ * Software for additional information regarding your rights and
+ * obligations.
+ *
+ * THE SOFTWARE AND DOCUMENTATION ARE PROVIDED "AS IS" WITHOUT
+ * WARRANTY OF ANY KIND, EITHER EXPRESS OR IMPLIED, INCLUDING WITHOUT
+ * LIMITATION, ANY WARRANTY OF MERCHANTABILITY, FITNESS FOR A
+ * PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT SHALL
+ * MICROCHIP BE LIABLE FOR ANY INCIDENTAL, SPECIAL, INDIRECT OR
+ * CONSEQUENTIAL DAMAGES, LOST PROFITS OR LOST DATA, COST OF
+ * PROCUREMENT OF SUBSTITUTE GOODS, TECHNOLOGY OR SERVICES, ANY CLAIMS
+ * BY THIRD PARTIES (INCLUDING BUT NOT LIMITED TO ANY DEFENSE
+ * THEREOF), ANY CLAIMS FOR INDEMNITY OR CONTRIBUTION, OR OTHER
+ * SIMILAR COSTS, WHETHER ASSERTED ON THE BASIS OF CONTRACT, TORT
+ * (INCLUDING NEGLIGENCE), BREACH OF WARRANTY, OR OTHERWISE.
+ *
+ *
+ * Author               Date    	Comment
+ *~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * Howard Schlunder     02/28/07	Original
+ ********************************************************************/
+#define __DHCPS_C
 #define __18F97J60
-
-// define the compiler we use
 #define __SDCC__
+#include <pic18f97j60.h> //ML
 
-// inlude all hardware and compiler dependent definitions
-#include "Include/HardwareProfile.h"
-
-// Include all headers for any enabled TCPIP Stack functions
-#include "Include/TCPIP_Stack/TCPIP.h"
-
-#include "Include/TCPIP_Stack/Delay.h"
-
-#include "Include/DHCPRelay.h"
-// Declare AppConfig structure and some other supporting stack variables
-APP_CONFIG AppConfig;
-BYTE AN0String[8];
+#include "../Include/TCPIPConfig.h"
 
 
-// Private helper functions.
-// These may or may not be present in all applications.
-static void InitAppConfig(void);
-static void InitializeBoard(void);
-void DisplayWORD(BYTE pos, WORD w); //write WORDs on LCD for debugging
+#if defined(STACK_USE_DHCP_SERVER)
 
-//
-// PIC18 Interrupt Service Routines
-//
-// NOTE: Several PICs, including the PIC18F4620 revision A3 have a RETFIE
-// FAST/MOVFF bug
-// The interruptlow keyword is used to work around the bug when using C18
+#include "../Include/TCPIP_Stack/TCPIP.h"
 
-//LowISR
-#if defined(__18CXX)
-#if defined(HI_TECH_C)
-void interrupt low_priority LowISR(void)
-#elif defined(__SDCC__)
-void LowISR(void) __interrupt (2) //ML for sdcc
-#else
-#pragma interruptlow LowISR
-void LowISR(void)
-#endif
+// Duration of our DHCP Lease in seconds.  This is extrememly short so
+// the client won't use our IP for long if we inadvertantly
+// provide a lease on a network that has a more authoratative DHCP server.
+#define DHCP_LEASE_DURATION				60ul
+/// Ignore: #define DHCP_MAX_LEASES					2		// Not implemented
+
+// DHCP Control Block.  Lease IP address is derived from index into DCB array.
+typedef struct _DHCP_CONTROL_BLOCK
 {
-	TickUpdate();
-}
-#if !defined(__SDCC__) && !defined(HI_TECH_C)
-//automatic with these compilers
-#pragma code lowVector=0x18
-void LowVector(void){_asm goto LowISR _endasm}
-#pragma code // Return to default code section
-#endif
+	TICK 		LeaseExpires;	// Expiration time for this lease
+	MAC_ADDR	ClientMAC;		// Client's MAC address.  Multicase bit is used to determine if a lease is given out or not
+	enum
+	{
+		LEASE_UNUSED = 0,
+		LEASE_REQUESTED,
+		LEASE_GRANTED
+	} smLease;					// Status of this lease
+} DHCP_CONTROL_BLOCK;
+
+static UDP_SOCKET			FromClientSocket;		// Socket used by DHCP Server
+static UDP_SOCKET			FromServeurtSocket;		// Socket used by DHCP Server
+static IP_ADDR				DHCPNextLease;	// IP Address to provide for next lease
+/// Ignore: static DHCP_CONTROL_BLOCK	DCB[DHCP_MAX_LEASES];	// Not Implmented
+BOOL 						bDHCPRelayEnabled = TRUE;	// Whether or not the DHCP server is enabled
+
+static void DHCPReplyToDiscovery(BOOTP_HEADER *Header);
+static void DHCPReplyToRequest(BOOTP_HEADER *Header, BOOL bAccept);
 
 
-//HighISR
-#if defined(HI_TECH_C)
-void interrupt HighISR(void)
-#elif defined(__SDCC__)
-void HighISR(void) __interrupt(1) //ML for sdcc
-#else
-#pragma interruptlow HighISR
-void HighISR(void)
-#endif
-{
-	//insert here code for high level interrupt, if any
-}
-#if !defined(__SDCC__) && !defined(HI_TECH_C)
-//automatic with these compilers
-#pragma code highVector=0x8
-void HighVector(void){_asm goto HighISR _endasm}
-#pragma code // Return to default code section
-#endif
-
-#endif
-
-const char* message;  //pointer to message to display on LCD
-
-//
-// Main application entry point.
-//
-
-
-#if defined(__18CXX) || defined(__SDCC__)
-void main(void)
-#else
-int main(void)
-#endif
-{
-	
-    // Initialize interrupts and application specific hardware
-    InitializeBoard();
-	
-    // Initialize and display message on the LCD
-    LCDInit();
-    DelayMs(100);
-    DisplayString (0,"Olimex"); //first arg is start position on 32 pos LCD
-	
-    // Initialize Timer0, and low priority interrupts, used as clock.
-    TickInit();
-	
-    // Initialize Stack and application related variables in AppConfig.
-    InitAppConfig();
-	
-    // Initialize core stack layers (MAC, ARP, TCP, UDP) and
-    // application modules (HTTP, SNMP, etc.)
-    StackInit();
-	
-	
-    // Now that all items are initialized, begin the co-operative
-    // multitasking loop.  This infinite loop will continuously
-    // execute all stack-related tasks, as well as your own
-    // application's functions.  Custom functions should be added
-    // at the end of this loop.
-	
-    // Note that this is a "co-operative multi-tasking" mechanism
-    // where every task performs its tasks (whether all in one shot
-    // or part of it) and returns so that other tasks can do their
-    // job.
-    // If a task needs very long time to do its job, it must be broken
-    // down into smaller pieces so that other tasks can have CPU time.
-	
-	
-    while(1)
-    {
-	
-		
-        // This task performs normal stack task including checking
-        // for incoming packet, type of packet and calling
-        // appropriate stack entity to process it.
-        StackTask();
-        
-        // This tasks invokes each of the core stack application tasks
-		//        StackApplications(); //all except dhcp, ping and arp
-		
-        // Process application specific tasks here.
-		
-        // If the local IP address has changed (ex: due to DHCP lease change)
-        // write the new IP address to the LCD display, UART, and Announce
-        // service
-		
-		//ProcessMessageTask();
-		//CheckingTimerTask();
-		
-		
-		
-    }//end of while(1)
-}//end of main()
-
-/*************************************************
- Function DisplayWORD:
- writes a WORD in hexa on the position indicated by
- pos.
- - pos=0 -> 1st line of the LCD
- - pos=16 -> 2nd line of the LCD
- 
- __SDCC__ only: for debugging
- *************************************************/
-#if defined(__SDCC__)
-void DisplayWORD(BYTE pos, WORD w) //WORD is a 16 bits unsigned
-{
-    BYTE WDigit[6]; //enough for a  number < 65636: 5 digits + \0
-    BYTE j;
-    BYTE LCDPos=0;  //write on first line of LCD
-    unsigned radix=10; //type expected by sdcc's ultoa()
-	
-    LCDPos=pos;
-    ultoa(w, WDigit, radix);
-    for(j = 0; j < strlen((char*)WDigit); j++)
-    {
-		LCDText[LCDPos++] = WDigit[j];
-    }
-    if(LCDPos < 32u)
-		LCDText[LCDPos] = 0;
-    LCDUpdate();
-}
-/*************************************************
- Function DisplayString:
- Writes an IP address to string to the LCD display
- starting at pos
- *************************************************/
-void DisplayString(BYTE pos, char* text)
-{
-	BYTE l= strlen(text)+1;
-	BYTE max= 32-pos;
-	strlcpy((char*)&LCDText[pos], text,(l<max)?l:max );
-	LCDUpdate();
-	
-}
-#endif
-
-/*************************************************
- Function DisplayIPValue:
- Writes an IP address to the LCD display
- *************************************************/
-
-#if defined(__SDCC__)
-void DisplayIPValue(DWORD IPdw) // 32 bits
-#else
-void DisplayIPValue(IP_ADDR IPVal)
-#endif
-{
-    BYTE IPDigit[4]; //enough for a number <256: 3 digits + \0
-    BYTE i;
-    BYTE j;
-    BYTE LCDPos=16;  //write on second line of LCD
-#if defined(__SDCC__)
-    unsigned int IP_field, radix=10; //type expected by sdcc's uitoa()
-#endif
-	
-    for(i = 0; i < sizeof(IP_ADDR); i++) //sizeof(IP_ADDR) is 4
-    {
-#if defined(__SDCC__)
-		IP_field =(WORD)(IPdw>>(i*8))&0xff;      //ML
-		uitoa(IP_field, IPDigit, radix);      //ML
-#else
-		uitoa((WORD)IPVal.v[i], IPDigit);
-#endif
-		
-		for(j = 0; j < strlen((char*)IPDigit); j++)
-		{
-			LCDText[LCDPos++] = IPDigit[j];
-		}
-		if(i == sizeof(IP_ADDR)-1)
-			break;
-		LCDText[LCDPos++] = '.';
-		
-    }
-    if(LCDPos < 32u)
-		LCDText[LCDPos] = 0;
-    LCDUpdate();
-}
-
-
-/****************************************************************************
+/*****************************************************************************
  Function:
- static void InitializeBoard(void)
+ void DHCPServerTask(void)
+ 
+ Summary:
+ Performs periodic DHCP server tasks.
  
  Description:
- This routine initializes the hardware.  It is a generic initialization
- routine for many of the Microchip development boards, using definitions
- in HardwareProfile.h to determine specific initialization.
+ This function performs any periodic tasks requied by the DHCP server
+ module, such as processing DHCP requests and distributing IP addresses.
  
  Precondition:
  None
  
  Parameters:
- None - None
+ None
+ 
+ Returns:
+ None
+ ***************************************************************************/
+void DHCPServerTask(void)
+{
+	BYTE 				i;
+	BYTE				Option, Len;
+	BOOTP_HEADER		BOOTPHeader;
+	DWORD				dw;
+	BOOL				bAccept;
+	static enum
+	{
+		DHCP_OPEN_SOCKET,
+		DHCP_LISTEN
+	} smDHCPServer = DHCP_OPEN_SOCKET;
+    
+#if defined(STACK_USE_DHCP_CLIENT)
+	// Make sure we don't clobber anyone else's DHCP server
+	if(DHCPIsServerDetected(0))
+		return;
+#endif
+    
+	if(!bDHCPRelayEnabled)
+		return;
+    
+	switch(smDHCPServer)
+	{
+		case DHCP_OPEN_SOCKET:
+			// Obtain a UDP socket to listen/transmit on
+			FromClientSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
+			if(FromClientSocket == INVALID_UDP_SOCKET)
+				break;
+            FromServeurSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
+			if(FromServeurSocket == INVALID_UDP_SOCKET)
+				break;
+
+            
+            
+			// Decide which address to lease out
+			// Note that this needs to be changed if we are to
+			// support more than one lease
+			DHCPNextLease.Val = (AppConfig.MyIPAddr.Val & AppConfig.MyMask.Val) + 0x02000000;
+			if(DHCPNextLease.v[3] == 255u)
+				DHCPNextLease.v[3] += 0x03;
+			if(DHCPNextLease.v[3] == 0u)
+				DHCPNextLease.v[3] += 0x02;
+            
+			smDHCPServer++;
+            
+		case DHCP_LISTEN:
+			// Check to see if a valid DHCP packet has arrived
+			if(UDPIsGetReady(FromClientSocket) < 241u)
+				break;
+            
+			// Retrieve the BOOTP header
+			UDPGetArray((BYTE*)&BOOTPHeader, sizeof(BOOTPHeader));
+            
+			bAccept = (BOOTPHeader.ClientIP.Val == DHCPNextLease.Val) || (BOOTPHeader.ClientIP.Val == 0x00000000u);
+            
+			// Validate first three fields
+			if(BOOTPHeader.MessageType != 1u)
+				break;
+			if(BOOTPHeader.HardwareType != 1u)
+				break;
+			if(BOOTPHeader.HardwareLen != 6u)
+				break;
+            
+			// Throw away 10 unused bytes of hardware address,
+			// server host name, and boot file name -- unsupported/not needed.
+			for(i = 0; i < 64+128+(16-sizeof(MAC_ADDR)); i++)
+				UDPGet(&Option);
+            
+			// Obtain Magic Cookie and verify
+			UDPGetArray((BYTE*)&dw, sizeof(DWORD));
+			if(dw != 0x63538263ul)
+				break;
+            
+			// Obtain options
+			while(1)
+			{
+				// Get option type
+				if(!UDPGet(&Option))
+					break;
+				if(Option == DHCP_END_OPTION)
+					break;
+                
+				// Get option length
+				UDPGet(&Len);
+                
+				// Process option
+				switch(Option)
+				{
+					case DHCP_MESSAGE_TYPE:
+						UDPGet(&i);
+						switch(i)
+                    {
+                        case DHCP_DISCOVER_MESSAGE:
+                            //TODO
+                            //DHCPReplyToDiscovery(&BOOTPHeader);
+                            ProcessDiscover(&BOOTPHeader);
+                            break;
+                            
+                        case DHCP_REQUEST_MESSAGE:
+                            //TODO
+                            //DHCPReplyToRequest(&BOOTPHeader, bAccept);
+                            ProcessRequests(&BOOTPHeader);
+                            break;
+                            
+							// Need to handle these if supporting more than one DHCP lease
+                        case DHCP_RELEASE_MESSAGE:
+                        case DHCP_DECLINE_MESSAGE:
+                            break;
+                            //TODO treat ?
+                    }
+						break;
+                        
+					case DHCP_PARAM_REQUEST_IP_ADDRESS:
+						if(Len == 4u)
+						{
+							// Get the requested IP address and see if it is the one we have on offer.
+							UDPGetArray((BYTE*)&dw, 4);
+							Len -= 4;
+							bAccept = (dw == DHCPNextLease.Val);
+						}
+						break;
+                        
+					case DHCP_END_OPTION:
+						UDPDiscard();
+						return;
+				}
+                
+				// Remove any unprocessed bytes that we don't care about
+				while(Len--)
+				{
+					UDPGet(&i);
+				}
+			}
+            
+			UDPDiscard();
+			break;
+	}
+}
+
+
+/*****************************************************************************
+ Function:
+ static void DHCPReplyToDiscovery(BOOTP_HEADER *Header)
+ 
+ Summary:
+ Replies to a DHCP Discover message.
+ 
+ Description:
+ This function replies to a DHCP Discover message by sending out a
+ DHCP Offer message.
+ 
+ Precondition:
+ None
+ 
+ Parameters:
+ Header - the BootP header this is in response to.
+ 
+ Returns:
+ None
+ ***************************************************************************/
+static void DHCPReplyToDiscovery(BOOTP_HEADER *Header)
+{
+	BYTE i;
+    
+	// Set the correct socket to active and ensure that
+	// enough space is available to generate the DHCP response
+	if(UDPIsPutReady(FromClientSocket) < 300u)
+		return;
+    
+	// Begin putting the BOOTP Header and DHCP options
+	UDPPut(BOOT_REQUEST);			// Message Type: 2 (BOOTP Reply)
+	// Reply with the same Hardware Type, Hardware Address Length, Hops, and Transaction ID fields
+	UDPPutArray((BYTE*)&(Header->HardwareType), 7);
+	UDPPut(0x00);				// Seconds Elapsed: 0 (Not used)
+	UDPPut(0x00);				// Seconds Elapsed: 0 (Not used)
+	UDPPutArray((BYTE*)&(Header->BootpFlags), sizeof(Header->BootpFlags));
+	UDPPut(0x00);				// Your (client) IP Address: 0.0.0.0 (none yet assigned)
+	UDPPut(0x00);				// Your (client) IP Address: 0.0.0.0 (none yet assigned)
+	UDPPut(0x00);				// Your (client) IP Address: 0.0.0.0 (none yet assigned)
+	UDPPut(0x00);				// Your (client) IP Address: 0.0.0.0 (none yet assigned)
+	UDPPutArray((BYTE*)&DHCPNextLease, sizeof(IP_ADDR));	// Lease IP address to give out
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPutArray((BYTE*)&(Header->ClientMAC), sizeof(MAC_ADDR));	// Client MAC address: Same as given by client
+	for(i = 0; i < 64+128+(16-sizeof(MAC_ADDR)); i++)	// Remaining 10 bytes of client hardware address, server host name: Null string (not used)
+		UDPPut(0x00);									// Boot filename: Null string (not used)
+	UDPPut(0x63);				// Magic Cookie: 0x63538263
+	UDPPut(0x82);				// Magic Cookie: 0x63538263
+	UDPPut(0x53);				// Magic Cookie: 0x63538263
+	UDPPut(0x63);				// Magic Cookie: 0x63538263
+	
+	// Options: DHCP Offer
+	UDPPut(DHCP_MESSAGE_TYPE);
+	UDPPut(1);
+	UDPPut(DHCP_DISCOVER_MESSAGE);
+    /*
+	// Option: Subnet Mask
+	UDPPut(DHCP_SUBNET_MASK);
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyMask, sizeof(IP_ADDR));
+    
+	// Option: Lease duration
+	UDPPut(DHCP_IP_LEASE_TIME);
+	UDPPut(4);
+	UDPPut((DHCP_LEASE_DURATION>>24) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION>>16) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION>>8) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION) & 0xFF);
+    */
+	// Option: Server identifier
+	UDPPut(DHCP_SERVER_IDENTIFIER);
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyIPAddr, sizeof(IP_ADDR));
+    
+	// Option: Router/Gateway address
+	UDPPut(DHCP_ROUTER);
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyIPAddr, sizeof(IP_ADDR));
+    
+	// No more options, mark ending
+	UDPPut(DHCP_END_OPTION);
+    
+	// Add zero padding to ensure compatibility with old BOOTP relays that discard small packets (<300 UDP octets)
+	while(UDPTxCount < 300u)
+		UDPPut(0);
+    
+	// Transmit the packet
+	UDPFlush();
+}
+
+
+/*****************************************************************************
+ Function:
+ static void DHCPReplyToRequest(BOOTP_HEADER *Header, BOOL bAccept)
+ 
+ Summary:
+ Replies to a DHCP Request message.
+ 
+ Description:
+ This function replies to a DHCP Request message by sending out a
+ DHCP Acknowledge message.
+ 
+ Precondition:
+ None
+ 
+ Parameters:
+ Header - the BootP header this is in response to.
+ bAccept - whether or not we've accepted this request
  
  Returns:
  None
  
- Remarks:
- None
+ Internal:
+ Needs to support more than one simultaneous lease in the future.
  ***************************************************************************/
-static void InitializeBoard(void)
+static void DHCPReplyToRequest(BOOTP_HEADER *Header, BOOL bAccept)
 {
-	// LEDs
-	LED0_TRIS = 0;  //LED0
-	LED1_TRIS = 0;  //LED1
-	LED2_TRIS = 0;  //LED2
-	LED3_TRIS = 0;  //LED_LCD1
-	LED4_TRIS = 0;  //LED_LCD2
-	LED5_TRIS = 0;  //LED5=RELAY1
-	LED6_TRIS = 0;  //LED7=RELAY2
-#if (!defined(EXPLORER_16) &&!defined(OLIMEX_MAXI))    // Pin multiplexed with
-	// a button on EXPLORER_16 and not used on OLIMEX_MAXI
-	LED7_TRIS = 0;
-#endif
-	LED_PUT(0x00);  //turn off LED0 - LED2
-	RELAY_PUT(0x00); //turn relays off to save power
+	BYTE i;
+    
+	// Set the correct socket to active and ensure that
+	// enough space is available to generate the DHCP response
+	if(UDPIsPutReady(FromClientSocket) < 300u)
+		return;
+    
+	// Search through all remaining options and look for the Requested IP address field
+	// Obtain options
+	while(UDPIsGetReady(FromClientSocket))
+	{
+		BYTE Option, Len;
+		DWORD dw;
+        
+		// Get option type
+		if(!UDPGet(&Option))
+			break;
+		if(Option == DHCP_END_OPTION)
+			break;
+        
+		// Get option length
+		UDPGet(&Len);
+        
+		// Process option
+		if((Option == DHCP_PARAM_REQUEST_IP_ADDRESS) && (Len == 4u))
+		{
+			// Get the requested IP address and see if it is the one we have on offer.  If not, we should send back a NAK, but since there could be some other DHCP server offering this address, we'll just silently ignore this request.
+			UDPGetArray((BYTE*)&dw, 4);
+			Len -= 4;
+			if(dw != DHCPNextLease.Val)
+			{
+				bAccept = FALSE;
+			}
+			break;
+		}
+        
+		// Remove the unprocessed bytes that we don't care about
+		while(Len--)
+		{
+			UDPGet(&i);
+		}
+	}
+    
+	// Begin putting the BOOTP Header and DHCP options
+	UDPPut(BOOT_REPLY);			// Message Type: 2 (BOOTP Reply)
+	// Reply with the same Hardware Type, Hardware Address Length, Hops, and Transaction ID fields
+	UDPPutArray((BYTE*)&(Header->HardwareType), 7);
+	UDPPut(0x00);				// Seconds Elapsed: 0 (Not used)
+	UDPPut(0x00);				// Seconds Elapsed: 0 (Not used)
+	UDPPutArray((BYTE*)&(Header->BootpFlags), sizeof(Header->BootpFlags));
+	UDPPutArray((BYTE*)&(Header->ClientIP), sizeof(IP_ADDR));// Your (client) IP Address:
+	UDPPutArray((BYTE*)&DHCPNextLease, sizeof(IP_ADDR));	// Lease IP address to give out
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Next Server IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPut(0x00);				// Relay Agent IP Address: 0.0.0.0 (not used)
+	UDPPutArray((BYTE*)&(Header->ClientMAC), sizeof(MAC_ADDR));	// Client MAC address: Same as given by client
+	for(i = 0; i < 64+128+(16-sizeof(MAC_ADDR)); i++)	// Remaining 10 bytes of client hardware address, server host name: Null string (not used)
+		UDPPut(0x00);									// Boot filename: Null string (not used)
+	UDPPut(0x63);				// Magic Cookie: 0x63538263
+	UDPPut(0x82);				// Magic Cookie: 0x63538263
+	UDPPut(0x53);				// Magic Cookie: 0x63538263
+	UDPPut(0x63);				// Magic Cookie: 0x63538263
 	
-	//set clock to 25 MHz
-	
-	// Enable PLL but disable pre and postscalers: the primary oscillator
-	// runs at the speed of the 25MHz external quartz
-	OSCTUNE = 0x40;
-	
-	// Switch to primary oscillator mode,
-	// regardless of if the config fuses tell us to start operating using
-	// the the internal RC
-	// The external clock must be running and must be 25MHz for the
-	// Ethernet module and thus this Ethernet bootloader to operate.
-	if(OSCCONbits.IDLEN) //IDLEN = 0x80; 0x02 selects the primary clock
-		OSCCON = 0x82;
-	else
-		OSCCON = 0x02;
-	
-	// Enable Interrupts
-	RCONbits.IPEN = 1;		// Enable interrupt priorities
-	INTCONbits.GIEH = 1;
-	INTCONbits.GIEL = 1;
-	
+	// Options: DHCP lease ACKnowledge
+	if(bAccept)
+	{
+		UDPPut(DHCP_OPTION_ACK_MESSAGE);
+		UDPPut(1);
+		UDPPut(DHCP_ACK_MESSAGE);
+	}
+	else	// Send a NACK
+	{
+		UDPPut(DHCP_OPTION_ACK_MESSAGE);
+		UDPPut(1);
+		UDPPut(DHCP_NAK_MESSAGE);
+	}
+    
+	// Option: Lease duration
+	UDPPut(DHCP_IP_LEASE_TIME);
+	UDPPut(4);
+	UDPPut((DHCP_LEASE_DURATION>>24) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION>>16) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION>>8) & 0xFF);
+	UDPPut((DHCP_LEASE_DURATION) & 0xFF);
+    
+	// Option: Server identifier
+	UDPPut(DHCP_SERVER_IDENTIFIER);
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyIPAddr, sizeof(IP_ADDR));
+    
+	// Option: Subnet Mask
+	UDPPut(DHCP_SUBNET_MASK);
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyMask, sizeof(IP_ADDR));
+    
+	// Option: Router/Gateway address
+	UDPPut(DHCP_ROUTER);		
+	UDPPut(sizeof(IP_ADDR));
+	UDPPutArray((BYTE*)&AppConfig.MyIPAddr, sizeof(IP_ADDR));
+    
+	// No more options, mark ending
+	UDPPut(DHCP_END_OPTION);
+    
+	// Add zero padding to ensure compatibility with old BOOTP relays that discard small packets (<300 UDP octets)
+	while(UDPTxCount < 300u)
+		UDPPut(0); 
+    
+	// Transmit the packet
+	UDPFlush();
 }
 
-/*********************************************************************
- * Function:        void InitAppConfig(void)
- *
- * PreCondition:    MPFSInit() is already called.
- *
- * Input:           None
- *
- * Output:          Write/Read non-volatile config variables.
- *
- * Side Effects:    None
- *
- * Overview:        None
- *
- * Note:            None
- ********************************************************************/
-
-static void InitAppConfig(void)
-{
-	AppConfig.Flags.bIsDHCPEnabled = FALSE;
-	AppConfig.Flags.bInConfigMode = TRUE;
-	
-	//ML using sdcc (MPLAB has a trick to generate serial numbers)
-	// first 3 bytes indicate manufacturer; last 3 bytes are serial number
-	AppConfig.MyMACAddr.v[0] = 0;
-	AppConfig.MyMACAddr.v[1] = 0x04;
-	AppConfig.MyMACAddr.v[2] = 0xA3;
-	AppConfig.MyMACAddr.v[3] = 0x01;
-	AppConfig.MyMACAddr.v[4] = 0x02;
-	AppConfig.MyMACAddr.v[5] = 0x03;
-	
-	//ML if you want to change, see TCPIPConfig.h
-	AppConfig.MyIPAddr.Val = MY_DEFAULT_IP_ADDR_BYTE1 |
-	MY_DEFAULT_IP_ADDR_BYTE2<<8ul | MY_DEFAULT_IP_ADDR_BYTE3<<16ul |
-	MY_DEFAULT_IP_ADDR_BYTE4<<24ul;
-	AppConfig.DefaultIPAddr.Val = AppConfig.MyIPAddr.Val;
-	AppConfig.MyMask.Val = MY_DEFAULT_MASK_BYTE1 |
-	MY_DEFAULT_MASK_BYTE2<<8ul | MY_DEFAULT_MASK_BYTE3<<16ul |
-	MY_DEFAULT_MASK_BYTE4<<24ul;
-	AppConfig.DefaultMask.Val = AppConfig.MyMask.Val;
-	AppConfig.MyGateway.Val = MY_DEFAULT_GATE_BYTE1 |
-	MY_DEFAULT_GATE_BYTE2<<8ul | MY_DEFAULT_GATE_BYTE3<<16ul |
-	MY_DEFAULT_GATE_BYTE4<<24ul;
-	AppConfig.PrimaryDNSServer.Val = MY_DEFAULT_PRIMARY_DNS_BYTE1 |
-	MY_DEFAULT_PRIMARY_DNS_BYTE2<<8ul  |
-	MY_DEFAULT_PRIMARY_DNS_BYTE3<<16ul  |
-	MY_DEFAULT_PRIMARY_DNS_BYTE4<<24ul;
-	AppConfig.SecondaryDNSServer.Val = MY_DEFAULT_SECONDARY_DNS_BYTE1 |
-	MY_DEFAULT_SECONDARY_DNS_BYTE2<<8ul  |
-	MY_DEFAULT_SECONDARY_DNS_BYTE3<<16ul  |
-	MY_DEFAULT_SECONDARY_DNS_BYTE4<<24ul;
-}
-
-/*-------------------------------------------------------------------------
- *
- * strlcpy.c
- *    strncpy done right
- *
- * This file was taken from OpenBSD and is used on platforms that don't
- * provide strlcpy().  The OpenBSD copyright terms follow.
- *-------------------------------------------------------------------------
- */
-
-/*  $OpenBSD: strlcpy.c,v 1.11 2006/05/05 15:27:38 millert Exp $    */
-
-/*
- * Copyright (c) 1998 Todd C. Miller <Todd.Miller@courtesan.com>
- *
- * Permission to use, copy, modify, and distribute this software for any
- * purpose with or without fee is hereby granted, provided that the above
- * copyright notice and this permission notice appear in all copies.
- *
- * THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
- * WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
- * MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
- * ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
- * WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
- * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
- * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
- */
-
-/*
- * Copy src to string dst of size siz.  At most siz-1 characters
- * will be copied.  Always NUL terminates (unless siz == 0).
- * Returns strlen(src); if retval >= siz, truncation occurred.
- * Function creation history:  http://www.gratisoft.us/todd/papers/strlcpy.html
- */
-size_t
-strlcpy(char *dst, const char *src, size_t siz)
-{
-    char       *d = dst;
-    const char *s = src;
-    size_t      n = siz;
-	
-    /* Copy as many bytes as will fit */
-    if (n != 0)
-    {
-        while (--n != 0)
-        {
-            if ((*d++ = *s++) == '\0')
-                break;
-        }
-    }
-	
-    /* Not enough room in dst, add NUL and traverse rest of src */
-    if (n == 0)
-    {
-        if (siz != 0)
-            *d = '\0';          /* NUL-terminate dst */
-        while (*s++)
-            ;
-    }
-	
-    return (s - src - 1);       /* count does not include NUL */
-}
+#endif //#if defined(STACK_USE_DHCP_SERVER)
