@@ -111,6 +111,8 @@ void DHCPRelayInit(void)
 	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET)
 				return;
 			
+			DHCPRelay.my_ip = AppConfig.MyIPAddr;
+			DHCPRelay.router_ip = AppConfig.MyGateway;
 	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
 }
@@ -275,6 +277,7 @@ void ServerToClient(void)
 			break;
 			
 		case SM_PROCESS_ACK:
+			//Store information 
 			break;
 			
 		case SM_PROCESS_NACK:
