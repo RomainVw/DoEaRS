@@ -25,20 +25,31 @@
 #define LEASE_TIME		300
 typedef enum
 {
-	SM_GET_SOCKET = 0,
-	SM_IDLE,
+	SM_IDLE = 0,
+	SM_CHECKING_TYPE,
+	SM_PROCESS_DISCOVER,
+	SM_REQUEST_FROM_KNOWN,
+	SM_REQUEST_FROM_UNKNOWN,
+	SM_PROCESS_DECLINE
+} C2SSTATE = SM_IDLE;
+
+typedef enum
+{
+	SM_IDLE = 0,
 	SM_CHECKING_TYPE,
 	SM_PROCESS_OFFER,
 	SM_PROCESS_ACK,
 	SM_PROCESS_NACK,
 	SM_ACK_FROM_UNKNOWN,
 	SM_ACK_FROM_KNOWN
-} S2CSTATE;
+} S2CSTATE = SM_IDLE;
+
 
 typedef struct _DHCP_CONTROL_BLOCK
 {
 	TICK 		LeaseExpires;	// Expiration time for this lease
 	MAC_ADDR	ClientMAC;		// Client's MAC address.  Multicase bit is used to determine if a lease is given out or not
+	IP_ADDR		ClientIp;
 	enum
 	{
 		LEASE_UNUSED = 0,
@@ -69,10 +80,14 @@ typedef struct
 typedef struct
 {
     UDP_SOCKET  s2cSocket;  // Handle to DHCP client socket
+    UDP_SOCKET  c2sSocket;  // Handle to DHCP server socket
 	
     S2CSTATE	s2cState;	  // DHCP client state machine variable
+    C2SSTATE	c2sState;	  // DHCP server state machine variable
     //Some variables for relay
 	DHCP_MESSAGE message;
+	DHCP_MESSAGE client_message;
+	
 	DHCP_CONTROL_BLOCK	DCB[DHCP_MAX_LEASES];
 } DHCP_RELAY_VARS;
 
@@ -88,11 +103,16 @@ void ServerToClient(void)
 	        DHCPRelay.s2cSocket = UDPOpen(DHCP_CLIENT_PORT, NULL, DHCP_SERVER_PORT);
 	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET) break;
 			
+			DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
+	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET) break;
+			
 	        DHCPRelay.s2cState = SM_IDLE;
+	        DHCPRelay.c2sState = SM_IDLE;
+	        
 	        // No break
 		case SM_IDLE:
 			
-			if(UDPIsGetReady(DHCPRelay.s2cSocket))
+			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE;
 			}
@@ -142,6 +162,10 @@ void ServerToClient(void)
 					end = TRUE;
 					break;
 				}
+				if(op == DHCP_END_OPTION) {
+					end = TRUE;
+					break;
+				}
 				UDPGet(&len);       // Get option len
 				cont = (BYTE *) calloc(len, sizeof(BYTE));
 				UDPGetArray(cont, len);
@@ -171,7 +195,7 @@ void ServerToClient(void)
 				option.content = cont;
 				options[i] = option;
  				i++;
-			} while (end);
+			} while (!end);
 			
 			switch (type) {
 				case DHCP_OFFER_MESSAGE:
