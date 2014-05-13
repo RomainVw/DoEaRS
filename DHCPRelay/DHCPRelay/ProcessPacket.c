@@ -105,11 +105,15 @@ void DHCPRelayInit(void)
 {
 			// Open a socket to send and receive broadcast messages on
 	        DHCPRelay.s2cSocket = UDPOpen(DHCP_CLIENT_PORT, NULL, DHCP_SERVER_PORT);
-	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET) break;
+	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET)
+				return;
 			
 			DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
-	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET) break;
+	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET)
+				return;
 			
+			DHCPRelay.my_ip = AppConfig.MyIPAddr;
+			DHCPRelay.router_ip = AppConfig.MyGateway;
 	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
 }
@@ -161,7 +165,8 @@ void ServerToClient(void)
 			BYTE op, len;
 			BYTE *cont;
 			DHCP_OPTION *options;
-			options = (DHCP_OPTION *) calloc(52, sizeof(DHCP_OPTION)); //Minimum 52
+			UINT allocated_option = 52;
+			options = (DHCP_OPTION *) calloc(allocated_option, sizeof(DHCP_OPTION)); //Minimum 52
 			type = DHCP_UNKNOWN_MESSAGE;
 			i = 0;
 			do {
@@ -225,6 +230,10 @@ void ServerToClient(void)
 				option.content = cont;
 				options[i] = option;
  				i++;
+				if (allocated_option == i) {
+					options = realloc(options, allocated_option + (5 * sizeof(DHCP_OPTION)));
+					allocated_option += 5;
+				}
 			} while (!end);
 			
 			if (!broadcastOptionPresent) {
@@ -269,6 +278,7 @@ void ServerToClient(void)
 			break;
 			
 		case SM_PROCESS_ACK:
+			//Store information 
 			break;
 			
 		case SM_PROCESS_NACK:
