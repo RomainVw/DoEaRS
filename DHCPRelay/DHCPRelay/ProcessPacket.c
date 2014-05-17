@@ -121,10 +121,7 @@ void DHCPRelayInit(void)
 	        DHCPRelay.c2sState = SM_IDLE;
 			int i;
 			for( i = 0; i < DHCP_MAX_LEASES; i++) {
-				int j;
-				for (j = 0; j < 6; j++) {
-					DHCPRelay.DCB[i].ClientMAC.v[j] = 0;
-				}
+				DHCPRelay.DCB[i].smLease = LEASE_UNUSED;
 			}
 			DHCPRelay.dwTimer = TickGet();
 }
@@ -142,23 +139,7 @@ void ServerToClient(void)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
 			}
-			if(TickGet() - DHCPRelay.dwTimer < TICK_SECOND) break;
 			
-			// Check to see if our lease is still valid, if so, decrement
-			// lease time
-			
-			DHCPRelay.dwTimer += TICK_SECOND;
-			for (i = 0; i < DHCP_MAX_LEASES; i++) {
-				if(DHCPRelay.DCB[i].LeaseExpires >= 2ul) {
-					DHCPRelay.DCB[i].LeaseExpires--;
-				} else{
-					if(++DHCPRelay.DCB[i].nbLeaseMissed >= 5){
-						//TODO
-					}
-					DHCPRelay.DCB[i].LeaseExpires = LEASE_TIME;
-				}
-					
-			}
 			
 			break;
 			
@@ -289,12 +270,13 @@ void ServerToClient(void)
 			DHCPRelay.s2c_message.nb_options = i + 1;
 			DHCPRelay.s2c_message.options = options;
 			//Done with the packet
+			DHCPRelay.s2c_message.header.Hops += 1;
 			UDPDiscard();
 			
 			break;
 			
 		case SM_PROCESS_OFFER:
-			DHCPRelay.s2c_message.header.Hops += 1;
+			//just forward it
 			DHCPRelay.s2cState = SM_SEND_S;
 			break;
 			
@@ -303,22 +285,19 @@ void ServerToClient(void)
 			int clientIndex = -1;
 			int freeSlotIndex = -1;
 			BOOL known = FALSE;
-			BOOL free = FALSE;
 			for (i = 0; i < DHCP_MAX_LEASES; i++) {
 				int j;
 				known = TRUE;
-				free = TRUE;
-				for (j = 0; j < 6; j++) {
-					if(DHCPRelay.DCB[i].ClientMAC.v[j] != DHCPRelay.s2c_message.header.ClientMAC.v[j]){
-						known = FALSE;
-						break;
-					}
-					else if (DHCPRelay.DCB[i].ClientMAC.v[j]) {
-						free = FALSE;
-					}
-				}
-				if (free) {
+				if (DHCPRelay.DCB[i].smLease == LEASE_UNUSED) {
 					freeSlotIndex = i;
+				}
+				else {
+					for (j = 0; j < 6; j++) {
+						if(DHCPRelay.DCB[i].ClientMAC.v[j] != DHCPRelay.s2c_message.header.ClientMAC.v[j]){
+							known = FALSE;
+							break;
+						}
+					}
 				}
 				if(known) {
 					clientIndex = i;
@@ -328,9 +307,10 @@ void ServerToClient(void)
 			if(clientIndex >= 0)//client is known
 				client = DHCPRelay.DCB[clientIndex];
 			
-			else // client not known
+			else if (freeSlotIndex >= 0)// client not known
 				client = DHCPRelay.DCB[freeSlotIndex];
-			
+			else //no lease left
+				DHCPRelay.s2cState = SM_IDLE_S;
 			client.ClientMAC = DHCPRelay.s2c_message.header.ClientMAC;
 			client.ClientIp = DHCPRelay.s2c_message.header.YourIP;
 			client.LeaseExpires = LEASE_TIME;
@@ -350,6 +330,7 @@ void ServerToClient(void)
 					option.content[0] = (LEASE_TIME) & 0xFF;
 				}
 			}
+			client.smLease = LEASE_GRANTED;
 			client.nbLeaseMissed = 0;
 			DHCPRelay.s2cState = SM_SEND_S;
 			break;
@@ -357,6 +338,17 @@ void ServerToClient(void)
 			
 		case SM_PROCESS_NACK:
 			//forward it for the moment
+			for (i = 0; i < DHCP_MAX_LEASES; i++) {
+				if (DHCPRelay.DCB[i].smLease == LEASE_GRANTED) {
+					int j;
+					BOOL same = TRUE;
+					for (j = 0; j < 6; j++) {
+						if(DHCPRelay.DCB[i].ClientMAC.v[j] != DHCPRelay.s2c_message.header.ClientMAC.v[j])
+							same = FALSE;
+					}
+					if (same) DHCPRelay.DCB[i].smLease = LEASE_UNUSED;
+				}
+			}
 			DHCPRelay.s2cState = SM_SEND_S;
 			break;
 
@@ -584,4 +576,64 @@ void ClientToServer(void)
 			
 			break;
 	}
+	
+}
+
+void TimerTask() {
+	static enum
+	{
+		SM_INIT = 0,
+		SM_MONITOR_TIME,
+		SM_RENEWING,
+		SM_REMOVING
+	} TimerState = SM_INIT;
+	static TICK Timer;
+	
+	static int i;
+	switch (TimerState) {
+		case SM_INIT:
+			Timer = TickGet();
+			TimerState = SM_MONITOR_TIME;
+			break;
+		case SM_MONITOR_TIME:
+			if(TickGet() - Timer < TICK_SECOND) break;
+			
+			// Check to see if our lease is still valid, if so, decrement
+			// lease time
+			
+			Timer += TICK_SECOND;
+			for (i = 0; i < DHCP_MAX_LEASES; i++) {
+				if (DHCPRelay.DCB[i].smLease != LEASE_GRANTED) {
+					break;
+				}
+				if(DHCPRelay.DCB[i].LeaseExpires >= 2ul) {
+					DHCPRelay.DCB[i].LeaseExpires--;
+				} else {
+					if(++DHCPRelay.DCB[i].nbLeaseMissed >= 5){
+						TimerState = SM_REMOVING;
+						break;
+					}
+					DHCPRelay.DCB[i].LeaseExpires = LEASE_TIME;
+				}
+				if (DHCPRelay.DCB[i].RealLeaseTime >= 2ul) {
+					DHCPRelay.DCB[i].RealLeaseTime--;
+				}
+				else {
+					TimerState = SM_RENEWING;
+					break;
+				}
+			}
+			break;
+			
+		case SM_RENEWING:
+			DHCPRelay.DCB[i].smLease = LEASE_REQUESTED;
+			//send to server
+			break;
+			
+		case SM_REMOVING:
+			DHCPRelay.DCB[i].smLease = LEASE_UNUSED; //mark as unused
+			TimerState = SM_MONITOR_TIME;
+			break;
+	}
+	
 }
