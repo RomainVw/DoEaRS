@@ -33,7 +33,6 @@
 #include "Include/TCPIP_Stack/Delay.h"
 
 #include "Include/DHCPRelay.h"
-#include "ProcessPacket.h"
 // Declare AppConfig structure and some other supporting stack variables
 APP_CONFIG AppConfig;
 BYTE AN0String[8];

@@ -15,7 +15,7 @@ OBJECTS=Objects/DHCPRelay.o  Objects/Announce.o Objects/ARP.o Objects/Delay.o \
    Objects/DHCP.o Objects/DHCPs.o Objects/DNS.o  Objects/ETH97J60.o  \
    Objects/Hashes.o Objects/Helpers.o Objects/ICMP.o Objects/IP.o \
    Objects/LCDBlocking.o Objects/StackTsk.o Objects/UDPPerformanceTest.o \
-   Objects/Tick.o Objects/UDP.o
+   Objects/Tick.o Objects/UDP.o ProcessPacket.o
 
 SDCC_HEADERS=/usr/local/share/sdcc/include/string.h \
    /usr/local/share/sdcc/include/stdlib.h \
@@ -273,6 +273,10 @@ Objects/LegacyHTTPApp.o : LegacyHTTPApp.c $(SDCC_HEADERS)  \
 Objects/PingDemo.o : PingDemo.c $(SDCC_HEADERS)  \
    $(SDCC_PIC16_HEADERS) $(APP_HEADERS) $(TCPIP_HEADERS)
 	$(CC) -c -mpic16 -p18f97j60  -o"Objects/PingDemo.o" -L/usr/local/lib/pic16  PingDemo.c
+	
+ProcessPacket.o : ProcessPacket.c $(SDCC_HEADERS)  \
+   $(SDCC_PIC16_HEADERS) $(APP_HEADERS) $(TCPIP_HEADERS)
+	$(CC) -c -mpic16 -p18f97j60  -o"ProcessPacket.o" -L/usr/local/lib/pic16  ProcessPacket.c
 
 Objects/SMTPDemo.o : SMTPDemo.c  $(SDCC_HEADERS)  \
    $(SDCC_PIC16_HEADERS) $(APP_HEADERS) $(TCPIP_HEADERS)
