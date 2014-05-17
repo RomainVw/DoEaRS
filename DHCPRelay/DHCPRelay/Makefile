@@ -21,7 +21,8 @@ SDCC_HEADERS=/usr/local/share/sdcc/include/string.h \
    /usr/local/share/sdcc/include/stdlib.h \
    /usr/local/share/sdcc/include/stdio.h \
    /usr/local/share/sdcc/include/stddef.h \
-   /usr/local/share/sdcc/include/stdarg.h 
+   /usr/local/share/sdcc/include/stdarg.h \
+   /usr/local/share/sdcc/include/malloc.h
 
 SDCC_PIC16_HEADERS=/usr/local/share/sdcc/include/pic16/pic18f97j60.h
 

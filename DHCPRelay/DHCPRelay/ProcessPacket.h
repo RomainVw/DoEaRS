@@ -41,19 +41,21 @@ typedef enum
 	SM_SEND_S
 } S2CSTATE;
 
+typedef enum
+{
+	LEASE_UNUSED = 0,
+	LEASE_REQUESTED,
+	LEASE_GRANTED
+} LEASE_STATE;
+
 typedef struct _DHCP_CONTROL_BLOCK
 {
+	LEASE_STATE smLease;
 	TICK 		LeaseExpires;	// Expiration time for this lease
 	TICK		RealLeaseTime;
 	MAC_ADDR	ClientMAC;		// Client's MAC address.  Multicase bit is used to determine if a lease is given out or not
 	IP_ADDR		ClientIp;
-	UINT		nbLeaseMissed;
-	enum
-	{
-		LEASE_UNUSED = 0,
-		LEASE_REQUESTED,
-		LEASE_GRANTED
-	} smLease;					// Status of this lease
+	UINT		nbLeaseMissed; // Status of this lease
 } DHCP_CONTROL_BLOCK;
 
 

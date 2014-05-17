@@ -7,30 +7,21 @@
 //
 
 #include <stdio.h>
+
 #define __SMTPDEMO_C
 #define __18F97J60
 #define __SDCC__
-
+#include <malloc.h>
 #include <pic18f97j60.h> //ML
 
 #include "Include/TCPIPConfig.h"
-#include "Include/TCPIPConfig.h/DHCP.h"
 
-
-#include "../Include/TCPIPConfig.h"
 #include "Include/TCPIP_Stack/TCPIP.h"
 #include "Include/MainDemo.h"
 #include "ProcessPacket.h"
 
-#define DHCP_MAX_LEASES					2
-#define LEASE_TIME		300ul
-
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
-#define SERVER_IP_LB 192
-#define SERVER_IP_HB 168
-#define SERVER_IP_UB 1
-#define SERVER_IP_MB 2
 
 
 static DHCP_RELAY_VARS DHCPRelay;
@@ -38,14 +29,15 @@ static DHCP_RELAY_VARS DHCPRelay;
 
 void DHCPRelayInit(void)
 {
+			int i;
 			// Open a socket to send and receive broadcast messages on
 	        DHCPRelay.s2cSocket = UDPOpen(DHCP_CLIENT_PORT, NULL, DHCP_SERVER_PORT);
 	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET)
 				return;
 			
 				
-			DHCPRelay.my_ip = AppConfig.MyIPAddr;
-			DHCPRelay.router_ip = AppConfig.MyGateway;
+			DHCPRelay.my_ip.Val = AppConfig.MyIPAddr.Val;
+			DHCPRelay.router_ip.Val = AppConfig.MyGateway.Val;
 	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
 	
@@ -54,7 +46,6 @@ void DHCPRelayInit(void)
 			DHCPRelay.server_info.IPAddr.byte.UB = SERVER_IP_UB;
 			DHCPRelay.server_info.IPAddr.byte.MB = SERVER_IP_MB;
 
-			int i;
 			for( i = 0; i < DHCP_MAX_LEASES; i++) {
 				DHCPRelay.DCB[i].smLease = LEASE_UNUSED;
 			}
@@ -69,7 +60,8 @@ void ServerToClient(void)
 	switch(DHCPRelay.s2cState)
 	{
 
-		case SM_IDLE_S:			
+		case SM_IDLE_S: {
+				
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
@@ -77,34 +69,14 @@ void ServerToClient(void)
 			
 			
 			break;
+		}
 			
-		case SM_CHECKING_TYPE_S:
 			
-			// Retrieve the BOOTP header
-			UDPGetArray((BYTE *)&header, sizeof(BOOTP_HEADER));
-			//Must be a server to client message !
-			if(header.MessageType != BOOT_REPLY)
-				break;
-			header.RelayAgentIP = DHCPRelay.my_ip;
-
-			
-			// Throw away part of client hardware address,
+		case SM_CHECKING_TYPE_S: {
 			BYTE macoffset[10];
-			UDPGetArray(macoffset, 10);
-			// server host name, and boot file name -- unsupported/not needed.
 			BYTE sname[64];
-			UDPGetArray(sname, 64);
 			BYTE file[128];
-			UDPGetArray(file, 128);
-			
 			DWORD dw;
-			
-			// Obtain Magic Cookie and verify
-			UDPGetArray((BYTE*)&dw, sizeof(DWORD));
-			if(dw != 0x63538263ul)
-				break;
-			
-			//CHECKING TYPE !
 			BOOL end = FALSE;
 			BOOL broadcastOptionPresent = FALSE;
 			BYTE type;
@@ -112,6 +84,28 @@ void ServerToClient(void)
 			BYTE *cont;
 			DHCP_OPTION *options;
 			UINT allocated_option = 52;
+
+			// Retrieve the BOOTP header
+			UDPGetArray((BYTE *)&header, sizeof(BOOTP_HEADER));
+			//Must be a server to client message !
+			if(header.MessageType != BOOT_REPLY)
+				break;
+			header.RelayAgentIP.Val = DHCPRelay.my_ip.Val;
+
+			
+			// Throw away part of client hardware address,
+			
+			UDPGetArray(macoffset, 10);
+			// server host name, and boot file name -- unsupported/not needed.
+			UDPGetArray(sname, 64);
+			UDPGetArray(file, 128);
+						
+			// Obtain Magic Cookie and verify
+			UDPGetArray((BYTE*)&dw, sizeof(DWORD));
+			if(dw != 0x63538263ul)
+				break;
+			
+			//CHECKING TYPE !
 			options = (DHCP_OPTION *) calloc(allocated_option, sizeof(DHCP_OPTION)); //Minimum 52
 			type = DHCP_UNKNOWN_MESSAGE;
 			i = 0;
@@ -160,25 +154,22 @@ void ServerToClient(void)
 						
 				}
 				//Store it to forward it !
-				DHCP_OPTION option;
-				option.type = op;
-				option.len = len;
-				option.content = cont;
-				options[i] = option;
+				options[i].type = op;
+				options[i].len = len;
+				options[i].content = cont;
  				i++;
 				if (allocated_option == i) {
-					options = realloc(options, allocated_option + (5 * sizeof(DHCP_OPTION)));
+					options = (DHCP_OPTION *) realloc(options, allocated_option + (5 * sizeof(DHCP_OPTION)));
 					allocated_option += 5;
 				}
 			} while (!end);
 			
 			if (!broadcastOptionPresent) {
-				DHCP_OPTION option;
-				option.type = DHCP_BROADCAST_ADRESS;
-				option.len = 4;
-				cont = (BYTE *) calloc(option.len, sizeof(BYTE));
-				memcpy(cont, &DHCPRelay.broadcast_adress, 4);
-				options[++i] = option;
+				options[i].type = DHCP_BROADCAST_ADRESS;
+				options[i].len = 4;
+				cont = (BYTE *) calloc(options[i].len, sizeof(BYTE));
+				memcpy(options[i].content, &DHCPRelay.broadcast_adress, 4);
+				i++;
 			}
 			
 			switch (type) {
@@ -197,11 +188,11 @@ void ServerToClient(void)
 			}
 			//Store the packet
 			
-			DHCPRelay.s2c_message.header = header;
-			memcpy(DHCPRelay.s2c_message.mac_offset, macoffset, sizeof(BYTE) *10);
-			memcpy(DHCPRelay.s2c_message.sname, sname, sizeof(BYTE)*64);
-			memcpy(DHCPRelay.s2c_message.file, file, sizeof(BYTE)*128);
-			memcpy(DHCPRelay.s2c_message.magic_cookie, &dw, sizeof(BYTE)*4);
+			memcpy(&(DHCPRelay.s2c_message.header), &(header), sizeof(BOOTP_HEADER));
+			memcpy(&(DHCPRelay.s2c_message.mac_offset), &(macoffset), sizeof(BYTE) *10);
+			memcpy(&(DHCPRelay.s2c_message.sname), &(sname), sizeof(BYTE)*64);
+			memcpy(&(DHCPRelay.s2c_message.file), &(file), sizeof(BYTE)*128);
+			memcpy(&(DHCPRelay.s2c_message.magic_cookie), &dw, sizeof(BYTE)*4);
 			DHCPRelay.s2c_message.nb_options = i + 1;
 			DHCPRelay.s2c_message.options = options;
 			//Done with the packet
@@ -209,6 +200,7 @@ void ServerToClient(void)
 			UDPDiscard();
 			
 			break;
+		}
 			
 		case SM_PROCESS_OFFER:
 			//just forward it
@@ -219,6 +211,8 @@ void ServerToClient(void)
 			//Store information
 			int clientIndex = -1;
 			int freeSlotIndex = -1;
+			DHCP_CONTROL_BLOCK* client;
+			DHCP_OPTION option;
 			BOOL known = FALSE;
 			for (i = 0; i < DHCP_MAX_LEASES; i++) {
 				int j;
@@ -238,25 +232,25 @@ void ServerToClient(void)
 					clientIndex = i;
 				}
 			}
-			DHCP_CONTROL_BLOCK client;
+			
 			if(clientIndex >= 0)//client is known
-				client = DHCPRelay.DCB[clientIndex];
+				client = DHCPRelay.DCB + clientIndex ;
 			
 			else if (freeSlotIndex >= 0)// client not known
-				client = DHCPRelay.DCB[freeSlotIndex];
+				client = DHCPRelay.DCB + freeSlotIndex;
 			else //no lease left
 				DHCPRelay.s2cState = SM_IDLE_S;
-			client.ClientMAC = DHCPRelay.s2c_message.header.ClientMAC;
-			client.ClientIp = DHCPRelay.s2c_message.header.YourIP;
-			client.LeaseExpires = LEASE_TIME;
+			memcpy(&(client->ClientMAC), &(DHCPRelay.s2c_message.header.ClientMAC), sizeof(MAC_ADDR));
+			client->ClientIp.Val = DHCPRelay.s2c_message.header.YourIP.Val;
+			client->LeaseExpires = LEASE_TIME;
 			for(i = 0; i < DHCPRelay.s2c_message.nb_options; i++ ) {
-				DHCP_OPTION option = DHCPRelay.s2c_message.options[i];
+				option = DHCPRelay.s2c_message.options[i];
 				if (option.type == DHCP_IP_LEASE_TIME)
 				{
-					(&client.RealLeaseTime)[3] = option.content[3];
-					(&client.RealLeaseTime)[2] = option.content[2];
-					(&client.RealLeaseTime)[1] = option.content[1];
-					(&client.RealLeaseTime)[0] = option.content[0];
+					(&(client->RealLeaseTime))[3] = option.content[3];
+					(&(client->RealLeaseTime))[2] = option.content[2];
+					(&(client->RealLeaseTime))[1] = option.content[1];
+					(&(client->RealLeaseTime))[0] = option.content[0];
 						
 					//MODIFY the lease time for the client
 					option.content[3] = (LEASE_TIME >>24) & 0xFF;
@@ -265,8 +259,8 @@ void ServerToClient(void)
 					option.content[0] = (LEASE_TIME) & 0xFF;
 				}
 			}
-			client.smLease = LEASE_GRANTED;
-			client.nbLeaseMissed = 0;
+			client->smLease = LEASE_GRANTED;
+			client->nbLeaseMissed = 0;
 			DHCPRelay.s2cState = SM_SEND_S;
 			break;
 		}
