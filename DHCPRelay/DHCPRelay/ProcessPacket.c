@@ -341,26 +341,35 @@ void ClientToServer(void)
 			}
 			else break;
 			
-		case SM_CHECKING_TYPE:
-			
+		case SM_CHECKING_TYPE:{
+			int i;
+            BYTE macoffset[10];
+            BYTE sname[64];
+            BYTE file[128];
+            DWORD dw;
+            BOOL end;
+            BOOL broadcastOptionPresent;
+            BYTE type;
+			BYTE op, len;
+			BYTE *cont;
+			DHCP_OPTION *options;
+            
 			// Retrieve the BOOTP header
 			UDPGetArray((BYTE *)&header, sizeof(BOOTP_HEADER));
 			//Must be a client to server message !
 			if(header.MessageType != BOOT_REQUEST)
 				break;
-			header.RelayAgentIP = DHCPRelay.my_ip;
+			header.RelayAgentIP.Val = DHCPRelay.my_ip.Val;
 
-			int i;
+			
 			// Throw away part of client hardware address,
-			BYTE macoffset[10];
+			
 			UDPGetArray(macoffset, 10);
 			// server host name, and boot file name -- unsupported/not needed.
-			BYTE sname[64];
 			UDPGetArray(sname, 64);
-			BYTE file[128];
 			UDPGetArray(file, 128);
 			
-			DWORD dw;
+			
 			
 			// Obtain Magic Cookie and verify
 			UDPGetArray((BYTE*)&dw, sizeof(DWORD));
@@ -368,12 +377,9 @@ void ClientToServer(void)
 				break;
 			
 			//CHECKING TYPE !
-			BOOL end = FALSE;
-			BOOL broadcastOptionPresent = FALSE;
-			BYTE type;
-			BYTE op, len;
-			BYTE *cont;
-			DHCP_OPTION *options;
+			end = FALSE;
+			broadcastOptionPresent = FALSE;
+
 			options = (DHCP_OPTION *) calloc(52, sizeof(DHCP_OPTION)); //Minimum 52
 			type = DHCP_UNKNOWN_MESSAGE;
 			i = 0;
@@ -402,21 +408,18 @@ void ClientToServer(void)
                         UDPDiscard(); // Packet not correct
                 }
 				//Store it to forward it !
-				DHCP_OPTION option;
-				option.type = op;
-				option.len = len;
-				option.content = cont;
-				options[i] = option;
+				options[i].type = op;
+				options[i].len = len;
+				options[i].content = cont;
  				i++;
 			} while (!end);
 			
 			if (!broadcastOptionPresent) {
-				DHCP_OPTION option;
-				option.type = DHCP_BROADCAST_ADRESS;
-				option.len = 4;
-				cont = (BYTE *) calloc(option.len, sizeof(BYTE));
+                options[i].type = DHCP_BROADCAST_ADRESS;
+				options[i].len = 4;
+				cont = (BYTE *) calloc(options[i].len, sizeof(BYTE));
 				memcpy(cont, &DHCPRelay.broadcast_adress, 4);
-				options[++i] = option;
+				i++;
 			}
 			
 			switch (type) {
@@ -438,16 +441,17 @@ void ClientToServer(void)
 			}
 			//Store the packet
 			
-			DHCPRelay.c2s_message.header = header;
+			memcpy(&(DHCPRelay.c2s_message.header),&header,sizeof(header));
 			memcpy(DHCPRelay.c2s_message.mac_offset, macoffset, 10);
 			memcpy(DHCPRelay.c2s_message.sname, sname, 64);
 			memcpy(DHCPRelay.c2s_message.file, file, 128);
-			DHCPRelay.c2s_message.nb_options = i + 1;
+			DHCPRelay.c2s_message.nb_options = i;
 			DHCPRelay.c2s_message.options = options;
 			//Done with the packet
 			UDPDiscard();
 			
 			break;
+        }
 			
 		case SM_PROCESS_DISCOVER:
             // We forward the message
@@ -455,11 +459,12 @@ void ClientToServer(void)
 			DHCPRelay.c2sState = SM_SEND;
 			break;
 			
-		case SM_PROCESS_REQUEST:
+		case SM_PROCESS_REQUEST:{
+            int j;
             
-            for (clientIndex = 0; clientIndex < DHCP_MAX_LEASES && isKnown == 0; i++) {
+            for (clientIndex = 0; clientIndex < DHCP_MAX_LEASES && isKnown == 0; clientIndex++) {
                 isKnown = 1;
-                for(int j = 0; j < 6 && isKnown == 1; j++)
+                for(j = 0; j < 6 && isKnown == 1; j++)
                 {
                     if (DHCPRelay.c2s_message.header.ClientMAC.v[j] != DHCPRelay.DCB[clientIndex].ClientMAC.v[j])
                         isKnown = 0;
@@ -468,6 +473,9 @@ void ClientToServer(void)
             
             if (isKnown){
                 DHCP_MESSAGE message_to_send;
+                int i;
+                int isRouter = 0, isBroadcast = 0 ;
+                
                 
                 // The remaining lease time is not sufficient
                 if (DHCPRelay.DCB[clientIndex].RealLeaseTime < 20){
@@ -485,14 +493,14 @@ void ClientToServer(void)
                 message_to_send.header.TransactionID = header.TransactionID;
                 message_to_send.header.BootpFlags = header.BootpFlags;
                 message_to_send.header.SecondsElapsed = 0;
-                message_to_send.header.ClientIP = header.ClientIP;
-                message_to_send.header.YourIP = DHCPRelay.DCB[clientIndex].ClientIp;
-                message_to_send.header.NextServerIP = DHCPRelay.router_ip;
-                message_to_send.header.RelayAgentIP =  DHCPRelay.my_ip;
+                message_to_send.header.ClientIP.Val = header.ClientIP.Val;
+                message_to_send.header.YourIP.Val = DHCPRelay.DCB[clientIndex].ClientIp.Val;
+                message_to_send.header.NextServerIP.Val = DHCPRelay.router_ip.Val;
+                message_to_send.header.RelayAgentIP.Val =  DHCPRelay.my_ip.Val;
                 
-                memcpy(message_to_send.mac_offset, macoffset, 10);
-                memcpy(message_to_send.sname, sname, 64);
-                memcpy(message_to_send.file, file, 128);
+                memcpy(message_to_send.mac_offset, DHCPRelay.c2s_message.mac_offset, 10);
+                memcpy(message_to_send.sname, DHCPRelay.c2s_message.sname, 64);
+                memcpy(message_to_send.file, DHCPRelay.c2s_message.file, 128);
                 
                 // ch addr same as client
                 
@@ -506,44 +514,44 @@ void ClientToServer(void)
                 
                 
                 
-                int isRouter = 0, isBroadcast = 0 ;
+                
                 
                 
                 for(i = 0; i < DHCPRelay.c2s_message.nb_options; i++ ) {
-                    switch (options[i].type) {
+                    switch (DHCPRelay.c2s_message.options[i].type) {
                         case DHCP_MESSAGE_TYPE:
-                            *(options[i].content) = DHCP_ACK_MESSAGE;
+                            *(DHCPRelay.c2s_message.options[i].content) = DHCP_ACK_MESSAGE;
                             break;
                         case DHCP_BROADCAST_ADRESS:
                             isBroadcast = 1;
-                            memcpy(options[i].content,&DHCPRelay.broadcast_adress, sizeof(BYTE) * 4);
-                            options[i].len = 4u;
+                            memcpy(DHCPRelay.c2s_message.options[i].content,&DHCPRelay.broadcast_adress, sizeof(BYTE) * 4);
+                            DHCPRelay.c2s_message.options[i].len = 4u;
                             break;
                         case DHCP_ROUTER:
                             isRouter = 1;
-                            memcpy(options[i].content, &DHCPRelay.router_ip, sizeof(BYTE) * 4);
-                            options[i].len = 4u;
+                            memcpy(DHCPRelay.c2s_message.options[i].content, &DHCPRelay.router_ip, sizeof(BYTE) * 4);
+                            DHCPRelay.c2s_message.options[i].len = 4u;
                         case DHCP_IP_LEASE_TIME:
-                            options[i].content[3] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>24) & 0xFF;
-							options[i].content[2] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>16) & 0xFF;
-							options[i].content[1] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>8) & 0xFF;
-							options[i].content[0] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires)) & 0xFF;
+                            DHCPRelay.c2s_message.options[i].content[3] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>24) & 0xFF;
+							DHCPRelay.c2s_message.options[i].content[2] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>16) & 0xFF;
+							DHCPRelay.c2s_message.options[i].content[1] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires) >>8) & 0xFF;
+							DHCPRelay.c2s_message.options[i].content[0] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires)) & 0xFF;
                         default:
                             break;
                     }
                     
-                    UDPPut(options[i].type);
-                    UDPPut(options[i].len);
-                    UDPPutArray(options[i].content,
-                                options[i].len);
+                    UDPPut(DHCPRelay.c2s_message.options[i].type);
+                    UDPPut(DHCPRelay.c2s_message.options[i].len);
+                    UDPPutArray(DHCPRelay.c2s_message.options[i].content,
+                                DHCPRelay.c2s_message.options[i].len);
                 }
 
                 
-                for(i = 0; i < message_to_send.nb_options; i++ ) {
-                    UDPPut(options[i].type);
-                    UDPPut(options[i].len);
-                    UDPPutArray(options[i].content,
-                                options[i].len);
+                for(i = 0; i < DHCPRelay.c2s_message.nb_options; i++ ) {
+                    UDPPut(DHCPRelay.c2s_message.options[i].type);
+                    UDPPut(DHCPRelay.c2s_message.options[i].len);
+                    UDPPutArray(DHCPRelay.c2s_message.options[i].content,
+                                DHCPRelay.c2s_message.options[i].len);
                 }
                 
                 
@@ -580,8 +588,8 @@ void ClientToServer(void)
                 //FREEEEE
            
                 for (i = 0; i < message_to_send.nb_options; i++) {
-                    free(options[i].content);
-                    free(options);
+                    free(DHCPRelay.c2s_message.options[i].content);
+                    free(DHCPRelay.c2s_message.options);
                 }
 
             
@@ -592,21 +600,15 @@ void ClientToServer(void)
                 DHCPRelay.c2sState = SM_SEND;
             }
 			break;
-			
-
-	/*	case SM_REQUEST_FROM_UNKNOWN:
-			break;
-			
-		case SM_REQUEST_FROM_KNOWN:
-			break;*/
-		
+        }
 		case SM_PROCESS_DECLINE:
             // We forward the message
             DHCPRelay.c2s_message.header.Hops += 1;
 			DHCPRelay.c2sState = SM_SEND;
 			break;
 			
-		case SM_SEND:
+		case SM_SEND:{
+            int i;
 			// Ensure transmitter is ready to accept data
 			if(UDPIsPutReady(DHCPRelay.s2cSocket) < 300u) break;
 			UDPPutArray((BYTE*)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
@@ -629,6 +631,7 @@ void ClientToServer(void)
 			}
 			
 			break;
+        }
 	}
 	
 }
