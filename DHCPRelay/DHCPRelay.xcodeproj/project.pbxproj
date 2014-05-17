@@ -167,6 +167,7 @@
 		D353B681191CC15500026B99 /* DHCPRelay.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = DHCPRelay.c; sourceTree = "<group>"; };
 		D353B683191CC21A00026B99 /* DHCPRelay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = DHCPRelay.h; sourceTree = "<group>"; };
 		D353B684191CD08800026B99 /* ProcessPacket.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = ProcessPacket.c; sourceTree = "<group>"; };
+		D36FA2181927CA2000B7D4D6 /* ProcessPacket.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ProcessPacket.h; sourceTree = "<group>"; };
 		D3A609E61912739500E4587F /* DHCPRelay */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = DHCPRelay; sourceTree = BUILT_PRODUCTS_DIR; };
 		D3A609EB1912739500E4587F /* DHCPRelay.1 */ = {isa = PBXFileReference; lastKnownFileType = text.man; path = DHCPRelay.1; sourceTree = "<group>"; };
 		D3A609F2191273A700E4587F /* #Maintest.c# */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "#Maintest.c#"; sourceTree = "<group>"; };
@@ -594,6 +595,7 @@
 				D3A60A68191273A700E4587F /* Objects */,
 				D3A60AAE191273A700E4587F /* PingDemo.c */,
 				D353B684191CD08800026B99 /* ProcessPacket.c */,
+				D36FA2181927CA2000B7D4D6 /* ProcessPacket.h */,
 				D3A60AAF191273A700E4587F /* SMTPDemo.c */,
 				D3A60AB0191273A800E4587F /* TCPIP_Stack */,
 				D3A60B65191273A800E4587F /* UARTConfig.c */,

@@ -9,6 +9,7 @@
 #ifndef DHCPRelay_DHCPRelay_h
 #define DHCPRelay_DHCPRelay_h
 #include "GenericTypeDefs.h"
+#include "../ProcessPacket.h"
 
 // Helpers functions to print IP ADRESS on the LCD
 #if defined(__SDCC__)
