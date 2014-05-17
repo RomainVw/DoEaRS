@@ -32,6 +32,7 @@ typedef enum
 	SM_REQUEST_FROM_KNOWN,
 	SM_REQUEST_FROM_UNKNOWN,
 	SM_PROCESS_DECLINE,
+	SM_SEND
 } C2SSTATE;
 
 typedef enum
@@ -41,16 +42,16 @@ typedef enum
 	SM_PROCESS_OFFER,
 	SM_PROCESS_ACK,
 	SM_PROCESS_NACK,
-	SM_ACK_FROM_UNKNOWN,
-	SM_ACK_FROM_KNOWN,
 	SM_SEND_S
 } S2CSTATE;
 
 typedef struct _DHCP_CONTROL_BLOCK
 {
 	TICK 		LeaseExpires;	// Expiration time for this lease
+	TICK		RealLeaseTime;
 	MAC_ADDR	ClientMAC;		// Client's MAC address.  Multicase bit is used to determine if a lease is given out or not
 	IP_ADDR		ClientIp;
+	UINT		nbLeaseMissed;
 	enum
 	{
 		LEASE_UNUSED = 0,
@@ -91,6 +92,8 @@ typedef struct
 	DHCP_MESSAGE s2c_message;
 	DHCP_MESSAGE c2s_message;
 	
+	TICK dwTimer;
+	
 	IP_ADDR my_ip;
 	IP_ADDR router_ip;
 	IP_ADDR broadcast_adress;
@@ -116,12 +119,21 @@ void DHCPRelayInit(void)
 			DHCPRelay.router_ip = AppConfig.MyGateway;
 	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
+			int i;
+			for( i = 0; i < DHCP_MAX_LEASES; i++) {
+				int j;
+				for (j = 0; j < 6; j++) {
+					DHCPRelay.DCB[i].ClientMAC.v[j] = 0;
+				}
+			}
+			DHCPRelay.dwTimer = TickGet();
 }
 
 
 void ServerToClient(void)
 {
 	BOOTP_HEADER header;
+	int i;
 	switch(DHCPRelay.s2cState)
 	{
 
@@ -130,7 +142,25 @@ void ServerToClient(void)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
 			}
-			else break;
+			if(TickGet() - DHCPRelay.dwTimer < TICK_SECOND) break;
+			
+			// Check to see if our lease is still valid, if so, decrement
+			// lease time
+			
+			DHCPRelay.dwTimer += TICK_SECOND;
+			for (i = 0; i < DHCP_MAX_LEASES; i++) {
+				if(DHCPRelay.DCB[i].LeaseExpires >= 2ul) {
+					DHCPRelay.DCB[i].LeaseExpires--;
+				} else{
+					if(++DHCPRelay.DCB[i].nbLeaseMissed >= 5){
+						//TODO
+					}
+					DHCPRelay.DCB[i].LeaseExpires = LEASE_TIME;
+				}
+					
+			}
+			
+			break;
 			
 		case SM_CHECKING_TYPE_S:
 			
@@ -141,7 +171,7 @@ void ServerToClient(void)
 				break;
 			header.RelayAgentIP = DHCPRelay.my_ip;
 
-			int i;
+			
 			// Throw away part of client hardware address,
 			BYTE macoffset[10];
 			UDPGetArray(macoffset, 10);
@@ -193,16 +223,6 @@ void ServerToClient(void)
 						else
 							UDPDiscard(); // Packet not correct
 						break;
-					case DHCP_IP_LEASE_TIME:
-						if ( len == 4u ) {
-							//MODIFY the lease time for the client
-							cont[3] = (LEASE_TIME >>24) & 0xFF;
-							cont[2] = (LEASE_TIME >>16) & 0xFF;
-							cont[1] = (LEASE_TIME >>8) & 0xFF;
-							cont[0] = (LEASE_TIME) & 0xFF;
-						}
-						else
-							UDPDiscard(); // Packet not correct
 					case DHCP_ROUTER:
 						len = 4;
 						memcpy(cont, &DHCPRelay.router_ip, 4);
@@ -262,9 +282,10 @@ void ServerToClient(void)
 			//Store the packet
 			
 			DHCPRelay.s2c_message.header = header;
-			memcpy(DHCPRelay.s2c_message.mac_offset, macoffset, 10);
-			memcpy(DHCPRelay.s2c_message.sname, sname, 64);
-			memcpy(DHCPRelay.s2c_message.file, file, 128);
+			memcpy(DHCPRelay.s2c_message.mac_offset, macoffset, sizeof(BYTE) *10);
+			memcpy(DHCPRelay.s2c_message.sname, sname, sizeof(BYTE)*64);
+			memcpy(DHCPRelay.s2c_message.file, file, sizeof(BYTE)*128);
+			memcpy(DHCPRelay.s2c_message.magic_cookie, &dw, sizeof(BYTE)*4);
 			DHCPRelay.s2c_message.nb_options = i + 1;
 			DHCPRelay.s2c_message.options = options;
 			//Done with the packet
@@ -277,25 +298,77 @@ void ServerToClient(void)
 			DHCPRelay.s2cState = SM_SEND_S;
 			break;
 			
-		case SM_PROCESS_ACK:
-			//Store information 
+		case SM_PROCESS_ACK: {
+			//Store information
+			int clientIndex = -1;
+			int freeSlotIndex = -1;
+			BOOL known = FALSE;
+			BOOL free = FALSE;
+			for (i = 0; i < DHCP_MAX_LEASES; i++) {
+				int j;
+				known = TRUE;
+				free = TRUE;
+				for (j = 0; j < 6; j++) {
+					if(DHCPRelay.DCB[i].ClientMAC.v[j] != DHCPRelay.s2c_message.header.ClientMAC.v[j]){
+						known = FALSE;
+						break;
+					}
+					else if (DHCPRelay.DCB[i].ClientMAC.v[j]) {
+						free = FALSE;
+					}
+				}
+				if (free) {
+					freeSlotIndex = i;
+				}
+				if(known) {
+					clientIndex = i;
+				}
+			}
+			DHCP_CONTROL_BLOCK client;
+			if(clientIndex >= 0)//client is known
+				client = DHCPRelay.DCB[clientIndex];
+			
+			else // client not known
+				client = DHCPRelay.DCB[freeSlotIndex];
+			
+			client.ClientMAC = DHCPRelay.s2c_message.header.ClientMAC;
+			client.ClientIp = DHCPRelay.s2c_message.header.YourIP;
+			client.LeaseExpires = LEASE_TIME;
+			for(i = 0; i < DHCPRelay.s2c_message.nb_options; i++ ) {
+				DHCP_OPTION option = DHCPRelay.s2c_message.options[i];
+				if (option.type == DHCP_IP_LEASE_TIME)
+				{
+					(&client.RealLeaseTime)[3] = option.content[3];
+					(&client.RealLeaseTime)[2] = option.content[2];
+					(&client.RealLeaseTime)[1] = option.content[1];
+					(&client.RealLeaseTime)[0] = option.content[0];
+						
+					//MODIFY the lease time for the client
+					option.content[3] = (LEASE_TIME >>24) & 0xFF;
+					option.content[2] = (LEASE_TIME >>16) & 0xFF;
+					option.content[1] = (LEASE_TIME >>8) & 0xFF;
+					option.content[0] = (LEASE_TIME) & 0xFF;
+				}
+			}
+			client.nbLeaseMissed = 0;
+			DHCPRelay.s2cState = SM_SEND_S;
 			break;
+		}
 			
 		case SM_PROCESS_NACK:
+			//forward it for the moment
+			DHCPRelay.s2cState = SM_SEND_S;
 			break;
-			
-		case SM_ACK_FROM_UNKNOWN:
-			break;
-			
-		case SM_ACK_FROM_KNOWN:
-			break;
+
 		case SM_SEND_S:
+
 			// Ensure transmitter is ready to accept data
 			if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
 			UDPPutArray((BYTE*)&DHCPRelay.s2c_message.header, sizeof(BOOTP_HEADER));
 			UDPPutArray(DHCPRelay.s2c_message.mac_offset, 10);
 			UDPPutArray(DHCPRelay.s2c_message.sname, sizeof(DHCPRelay.s2c_message.sname));
 			UDPPutArray(DHCPRelay.s2c_message.file, sizeof(DHCPRelay.s2c_message.file));
+			UDPPutArray(DHCPRelay.s2c_message.magic_cookie, sizeof(DHCPRelay.s2c_message.magic_cookie));
 			for(i = 0; i < DHCPRelay.s2c_message.nb_options; i++ ) {
 				UDPPut(DHCPRelay.s2c_message.options[i].type);
 				UDPPut(DHCPRelay.s2c_message.options[i].len);
@@ -311,6 +384,8 @@ void ServerToClient(void)
 				free(DHCPRelay.s2c_message.options);
 			}
 			
+			DHCPRelay.s2cState = SM_IDLE_S;
+
 			break;
 	}
 }
@@ -451,7 +526,7 @@ void ClientToServer(void)
 					
 				default:
 					//Ignore it
-					DHCPRelay.c2sState = SM_IDLE_S;
+					DHCPRelay.c2sState = SM_IDLE;
 					break;
 			}
 			//Store the packet
