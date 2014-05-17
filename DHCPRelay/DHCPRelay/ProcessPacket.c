@@ -26,14 +26,19 @@
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
 
+#define SERVER_IP_LB 192
+#define SERVER_IP_HB 168
+#define SERVER_IP_UB 1
+#define SERVER_IP_MB 2
+
 typedef enum
 {
-	SM_IDLE = 0,
+	SM_SEND_ARP = 0,
+	SM_GET_ARP,
+	SM_IDLE,
 	SM_CHECKING_TYPE,
 	SM_PROCESS_DISCOVER,
 	SM_PROCESS_REQUEST,
-	/*SM_REQUEST_FROM_KNOWN,
-	SM_REQUEST_FROM_UNKNOWN,*/
 	SM_PROCESS_DECLINE,
     SM_SEND
 } C2SSTATE;
@@ -95,7 +100,7 @@ typedef struct
 	DHCP_MESSAGE s2c_message;
 	DHCP_MESSAGE c2s_message;
 	
-	TICK dwTimer;
+	NODE_INFO server_info;
 	
 	IP_ADDR my_ip;
 	IP_ADDR router_ip;
@@ -114,19 +119,22 @@ void DHCPRelayInit(void)
 	        if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET)
 				return;
 			
-			DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
-	        if(DHCPRelay.c2sSocket == INVALID_UDP_SOCKET)
-				return;
-			
+				
 			DHCPRelay.my_ip = AppConfig.MyIPAddr;
 			DHCPRelay.router_ip = AppConfig.MyGateway;
 	        DHCPRelay.s2cState = SM_IDLE_S;
 	        DHCPRelay.c2sState = SM_IDLE;
+	
+			DHCPRelay.server_info.IPAddr.byte.LB = SERVER_IP_LB;
+			DHCPRelay.server_info.IPAddr.byte.HB = SERVER_IP_HB;
+			DHCPRelay.server_info.IPAddr.byte.UB = SERVER_IP_UB;
+			DHCPRelay.server_info.IPAddr.byte.MB = SERVER_IP_MB;
+
 			int i;
 			for( i = 0; i < DHCP_MAX_LEASES; i++) {
 				DHCPRelay.DCB[i].smLease = LEASE_UNUSED;
 			}
-			DHCPRelay.dwTimer = TickGet();
+	
 }
 
 
@@ -393,7 +401,21 @@ void ClientToServer(void)
 	BOOTP_HEADER header;
 	switch(DHCPRelay.c2sState)
 	{
-
+		case SM_SEND_ARP:
+			ARPResolve(&DHCPRelay.server_info.IPAddr);
+			DHCPRelay.c2sState = SM_GET_ARP;
+			break;
+			
+		case SM_GET_ARP:
+			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
+				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, &DHCPRelay.server_info, DHCP_CLIENT_PORT);
+				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET)
+					DHCPRelay.c2sState = SM_IDLE;
+				else DHCPRelay.c2sState = SM_SEND_ARP;
+			}
+			
+			break;
+			
 		case SM_IDLE:			
 			if(UDPIsGetReady(DHCPRelay.c2sSocket) >= 241u)
 			{

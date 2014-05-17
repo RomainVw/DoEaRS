@@ -33,6 +33,7 @@
 #include "Include/TCPIP_Stack/Delay.h"
 
 #include "Include/DHCPRelay.h"
+#include "ProcessPacket.h"
 // Declare AppConfig structure and some other supporting stack variables
 APP_CONFIG AppConfig;
 BYTE AN0String[8];
@@ -120,8 +121,7 @@ int main(void)
 	
     // Initialize Stack and application related variables in AppConfig.
     InitAppConfig();
-	
-	
+	DHCPRelayInit();
 	
     // Initialize core stack layers (MAC, ARP, TCP, UDP) and
     // application modules (HTTP, SNMP, etc.)
@@ -152,21 +152,17 @@ int main(void)
         StackTask();
 		TickUpdate();
 		
+		TimerTask();
 		
+		ClientToServer();
+		
+		ServerToClient();
 		
         
         // This tasks invokes each of the core stack application tasks
 		//        StackApplications(); //all except dhcp, ping and arp
 		
         // Process application specific tasks here.
-		
-        // If the local IP address has changed (ex: due to DHCP lease change)
-        // write the new IP address to the LCD display, UART, and Announce
-        // service
-		
-		//ProcessMessageTask();
-		//CheckingTimerTask();
-		
 		
 		
     }//end of while(1)
