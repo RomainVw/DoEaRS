@@ -106,7 +106,7 @@ void ServerToClient(void)
 				break;
 			
 			//CHECKING TYPE !
-			options = (DHCP_OPTION *) calloc(allocated_option, sizeof(DHCP_OPTION)); //Minimum 52
+			options = (DHCP_OPTION *) malloc(allocated_option * sizeof(DHCP_OPTION)); //Minimum 52
 			type = DHCP_UNKNOWN_MESSAGE;
 			i = 0;
 			do {
@@ -122,7 +122,7 @@ void ServerToClient(void)
 					break;
 				}
 				UDPGet(&len);       // Get option len
-				cont = (BYTE *) calloc(len, sizeof(BYTE));
+				cont = (BYTE *) malloc(len * sizeof(BYTE));
 				UDPGetArray(cont, len);
 				switch(op)
 				{
@@ -158,16 +158,16 @@ void ServerToClient(void)
 				options[i].len = len;
 				options[i].content = cont;
  				i++;
-				if (allocated_option == i) {
+				/*if (allocated_option == i) {
 					options = (DHCP_OPTION *) realloc(options, allocated_option + (5 * sizeof(DHCP_OPTION)));
 					allocated_option += 5;
-				}
+				}*/
 			} while (!end);
 			
 			if (!broadcastOptionPresent) {
 				options[i].type = DHCP_BROADCAST_ADRESS;
 				options[i].len = 4;
-				cont = (BYTE *) calloc(options[i].len, sizeof(BYTE));
+				cont = (BYTE *) malloc(options[i].len * sizeof(BYTE));
 				memcpy(options[i].content, &DHCPRelay.broadcast_adress, 4);
 				i++;
 			}
@@ -212,7 +212,7 @@ void ServerToClient(void)
 			int clientIndex = -1;
 			int freeSlotIndex = -1;
 			DHCP_CONTROL_BLOCK* client;
-			DHCP_OPTION option;
+			DHCP_OPTION* option;
 			BOOL known = FALSE;
 			for (i = 0; i < DHCP_MAX_LEASES; i++) {
 				int j;
@@ -233,30 +233,34 @@ void ServerToClient(void)
 				}
 			}
 			
-			if(clientIndex >= 0)//client is known
+			if(clientIndex >= 0) {//client is known
 				client = DHCPRelay.DCB + clientIndex ;
-			
-			else if (freeSlotIndex >= 0)// client not known
+			}
+			else if (freeSlotIndex >= 0) {// client not known
 				client = DHCPRelay.DCB + freeSlotIndex;
-			else //no lease left
+            }
+			else{ //no lease left
 				DHCPRelay.s2cState = SM_IDLE_S;
+                break;
+            }
+            
 			memcpy(&(client->ClientMAC), &(DHCPRelay.s2c_message.header.ClientMAC), sizeof(MAC_ADDR));
 			client->ClientIp.Val = DHCPRelay.s2c_message.header.YourIP.Val;
 			client->LeaseExpires = LEASE_TIME;
 			for(i = 0; i < DHCPRelay.s2c_message.nb_options; i++ ) {
-				option = DHCPRelay.s2c_message.options[i];
-				if (option.type == DHCP_IP_LEASE_TIME)
+				option = DHCPRelay.s2c_message.options+i;
+				if (option->type == DHCP_IP_LEASE_TIME)
 				{
-					(&(client->RealLeaseTime))[3] = option.content[3];
-					(&(client->RealLeaseTime))[2] = option.content[2];
-					(&(client->RealLeaseTime))[1] = option.content[1];
-					(&(client->RealLeaseTime))[0] = option.content[0];
+					(&(client->RealLeaseTime))[3] = option->content[3];
+					(&(client->RealLeaseTime))[2] = option->content[2];
+					(&(client->RealLeaseTime))[1] = option->content[1];
+					(&(client->RealLeaseTime))[0] = option->content[0];
 						
 					//MODIFY the lease time for the client
-					option.content[3] = (LEASE_TIME >>24) & 0xFF;
-					option.content[2] = (LEASE_TIME >>16) & 0xFF;
-					option.content[1] = (LEASE_TIME >>8) & 0xFF;
-					option.content[0] = (LEASE_TIME) & 0xFF;
+					option->content[3] = (LEASE_TIME >>24) & 0xFF;
+					option->content[2] = (LEASE_TIME >>16) & 0xFF;
+					option->content[1] = (LEASE_TIME >>8) & 0xFF;
+					option->content[0] = (LEASE_TIME) & 0xFF;
 				}
 			}
 			client->smLease = LEASE_GRANTED;
@@ -301,8 +305,8 @@ void ServerToClient(void)
 			//FREEEEE
 			
 			for (i = 0; i < DHCPRelay.s2c_message.nb_options; i++) {
-				free(DHCPRelay.s2c_message.options[i].content);
-				free(DHCPRelay.s2c_message.options);
+				free((void*)DHCPRelay.s2c_message.options[i].content);
+				free((void*)DHCPRelay.s2c_message.options);
 			}
 			
 			DHCPRelay.s2cState = SM_IDLE_S;
@@ -380,7 +384,7 @@ void ClientToServer(void)
 			end = FALSE;
 			broadcastOptionPresent = FALSE;
 
-			options = (DHCP_OPTION *) calloc(52, sizeof(DHCP_OPTION)); //Minimum 52
+			options = (DHCP_OPTION *) malloc(52 * sizeof(DHCP_OPTION)); //Minimum 52
 			type = DHCP_UNKNOWN_MESSAGE;
 			i = 0;
 			do {
@@ -396,7 +400,7 @@ void ClientToServer(void)
 					break;
 				}
 				UDPGet(&len);       // Get option len
-				cont = (BYTE *) calloc(len, sizeof(BYTE));
+				cont = (BYTE *) malloc(len * sizeof(BYTE));
 				UDPGetArray(cont, len);
 				
                 
@@ -417,7 +421,7 @@ void ClientToServer(void)
 			if (!broadcastOptionPresent) {
                 options[i].type = DHCP_BROADCAST_ADRESS;
 				options[i].len = 4;
-				cont = (BYTE *) calloc(options[i].len, sizeof(BYTE));
+				cont = (BYTE *) malloc(options[i].len * sizeof(BYTE));
 				memcpy(cont, &DHCPRelay.broadcast_adress, 4);
 				i++;
 			}
@@ -588,8 +592,8 @@ void ClientToServer(void)
                 //FREEEEE
            
                 for (i = 0; i < message_to_send.nb_options; i++) {
-                    free(DHCPRelay.c2s_message.options[i].content);
-                    free(DHCPRelay.c2s_message.options);
+                    free((void*)DHCPRelay.c2s_message.options[i].content);
+                    free((void*)DHCPRelay.c2s_message.options);
                 }
 
             
@@ -626,8 +630,8 @@ void ClientToServer(void)
 			//FREEEEE
 			
 			for (i = 0; i < DHCPRelay.c2s_message.nb_options; i++) {
-				free(DHCPRelay.c2s_message.options[i].content);
-				free(DHCPRelay.c2s_message.options);
+				free((void*)DHCPRelay.c2s_message.options[i].content);
+				free((void*)DHCPRelay.c2s_message.options);
 			}
 			
 			break;
