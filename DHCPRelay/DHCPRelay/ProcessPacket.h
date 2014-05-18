@@ -17,6 +17,10 @@
 #define SERVER_IP_UB 2
 #define SERVER_IP_MB 1
 
+#define MAX_OPTION 52
+#define MAX_CONTENT 20
+
+
 typedef enum
 {
 	SM_SEND_ARP = 0,
@@ -60,7 +64,7 @@ typedef struct _DHCP_CONTROL_BLOCK
 typedef struct {
 	BYTE type;
 	BYTE len;
-	BYTE *content;
+	BYTE content[MAX_CONTENT];
 } DHCP_OPTION;
 
 typedef struct
@@ -71,7 +75,7 @@ typedef struct
 	BYTE file[128];
 	BYTE magic_cookie[4];
 	UINT nb_options;
-	DHCP_OPTION *options;
+	DHCP_OPTION options[MAX_OPTION];
 } DHCP_MESSAGE ;
 
 
