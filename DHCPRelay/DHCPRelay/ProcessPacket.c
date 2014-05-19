@@ -104,8 +104,8 @@ void ServerToClient(void)
 			//Forward header
 			UDPPutArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
 			UDPPutArray(message.mac_offset, sizeof(BYTE)*10);
-			UDPPutArray(message.sname, sizeof(BYTE)*10);
-			UDPPutArray(message.file, sizeof(BYTE)*10);
+			UDPPutArray(message.sname, sizeof(BYTE)*64);
+			UDPPutArray(message.file, sizeof(BYTE)*128);
 			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
 			
 			
@@ -125,21 +125,19 @@ void ServerToClient(void)
 					break;
 				}
 				UDPGet(&(option.len));       // Get option len
-				BYTE content[option.len];
-				UDPGetArray(content, option.len);
-				option.content = content;
+				UDPGetArray(option.content, option.len);
 				switch(option.type)
 				{
 					case DHCP_MESSAGE_TYPE:
 						// Len must be 1.
 						if (option.len == 1u ) {
-							type = *(option.content);
+							type = option.content[0];
 						}
 						else
 							UDPDiscard(); // Packet not correct
 						break;
 					case DHCP_ROUTER:
-						option.len = 4;
+						option.len = 4u;
 						memcpy(option.content, &DHCPRelay.router_ip, sizeof(IP_ADDR));
 						routerOptionPresent = TRUE;
 						break;
@@ -560,7 +558,70 @@ void TimerTask() {
 			
 		case SM_RENEWING:
 			DHCPRelay.DCB[i].smLease = LEASE_REQUESTED;
-			//send to server
+			if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300) break;
+			UDPPut(BOOT_REQUEST);                       // op
+			UDPPut(BOOT_HW_TYPE);                       // htype
+			UDPPut(BOOT_LEN_OF_HW_TYPE);                // hlen
+			UDPPut(0);                                  // hops
+			UDPPut(0x12);                               // xid[0]
+			UDPPut(0x23);                               // xid[1]
+			UDPPut(0x34);                               // xid[2]
+			UDPPut(0x56);                               // xid[3]
+			UDPPut(0);                                  // secs[0]
+			UDPPut(0);                                  // secs[1]
+			UDPPut(0);									// flags[0]
+			// flags[0] with Broadcast flag clear/set to correspond to bUseUnicastMode
+			UDPPut(0);                                  // flags[1]
+			
+			//  use previously allocated IP address.
+			UDPPutArray(DHCPRelay.DCB[i].ClientIp.v, sizeof(IP_ADDR));
+			
+			// Set yiaddr, siaddr, giaddr as zeros,
+			for ( i = 0; i < 8u; i++ )	UDPPut(0x00);
+			
+			UDPPutArray(DHCPRelay.my_ip.v, sizeof(IP_ADDR));
+			
+			// Load chaddr - Client hardware address.
+			UDPPutArray(DHCPRelay.DCB[i].ClientMAC.v, sizeof(MAC_ADDR));
+			
+			// Set chaddr[6..15], sname and file as zeros.
+			for ( i = 0; i < 202u; i++ ) UDPPut(0);
+			
+			// Load magic cookie as per RFC 1533.
+			UDPPut(99);
+			UDPPut(130);
+			UDPPut(83);
+			UDPPut(99);
+			
+			// Load message type.
+			UDPPut(DHCP_MESSAGE_TYPE);
+			UDPPut(DHCP_MESSAGE_TYPE_LEN);
+			UDPPut(DHCP_REQUEST_MESSAGE);
+			
+			// Load our interested parameters
+			// This is hardcoded list.  If any new parameters are desired,
+			// new lines must be added here.
+			UDPPut(DHCP_PARAM_REQUEST_LIST);
+			UDPPut(DHCP_PARAM_REQUEST_LIST_LEN);
+			UDPPut(DHCP_SUBNET_MASK);
+			UDPPut(DHCP_ROUTER);
+			UDPPut(DHCP_DNS);
+			UDPPut(DHCP_HOST_NAME);
+			
+			
+			// End of Options.
+			UDPPut(DHCP_END_OPTION);
+			
+			// Add zero padding to ensure compatibility with old BOOTP relays that
+			//discard small packets (<300 UDP octets)
+			while(UDPTxCount < 300u) UDPPut(0);
+			
+			// Make sure we advirtise a 0.0.0.0 IP address so all DHCP servers will
+			// respond.  If we have a static IP outside the DHCP server's scope, it
+			// may simply ignore discover messages.
+			
+			UDPFlush();
+			TimerState = SM_MONITOR_TIME;
 			break;
 			
 		case SM_REMOVING:
