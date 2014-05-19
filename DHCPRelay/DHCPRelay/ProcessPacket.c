@@ -73,7 +73,7 @@ void ServerToClient(void)
 			
 		case SM_CHECKING_TYPE_S: {
 			DWORD dw;
-			BOOL end = FALSE;
+			volatile BOOL end = FALSE;
 			BOOL broadcastOptionPresent = FALSE;
 			BOOL routerOptionPresent = FALSE;
 			BYTE type;
@@ -216,20 +216,23 @@ void ClientToServer(void)
     int isRouter = 0, isBroadcast = 0 ;
     int ReplyAck= 0;
     DHCP_OPTION option;
-    BOOL end;
+    volatile BOOL end;
     BYTE content[256];
 	switch(DHCPRelay.c2sState)
 	{
 		case SM_SEND_ARP:
 			ARPResolve(&DHCPRelay.server_info.IPAddr);
 			DHCPRelay.c2sState = SM_GET_ARP;
+			DisplayString(0, "SEND_ARP");
 			break;
 			
 		case SM_GET_ARP:
 			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
 				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, &DHCPRelay.server_info, DHCP_CLIENT_PORT);
-				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET)
+				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET){
 					DHCPRelay.c2sState = SM_IDLE;
+					DisplayString(0, "ARP RESOLVED");
+				}
 				else DHCPRelay.c2sState = SM_SEND_ARP;
 			}
 			
@@ -357,11 +360,15 @@ void ClientToServer(void)
                             }
                             
                         }
+						else if (*content == DHCP_DISCOVER_MESSAGE) {
+							DisplayString(0, "DHCP_DISCOVER");
+						}
                         
                         
                     } else{
                         UDPDiscard(); // Packet not correct
                     }
+					
                     
                 }
                 
