@@ -23,15 +23,15 @@
 
 typedef enum
 {
-	SM_SEND_ARP = 0,
-	SM_GET_ARP,
-	SM_IDLE,
+	SM_IDLE = 0,
 	SM_CHECKING_TYPE
 } C2SSTATE;
 
 typedef enum
 {
-	SM_IDLE_S = 0,
+	SM_SEND_ARP = 0,
+	SM_GET_ARP,
+	SM_IDLE_S,
 	SM_CHECKING_TYPE_S,
 } S2CSTATE;
 
@@ -73,8 +73,8 @@ typedef struct
 // Unique variables per interface
 typedef struct
 {
-    UDP_SOCKET  s2cSocket;  // Handle to DHCP client socket
-    UDP_SOCKET  c2sSocket;  // Handle to DHCP server socket
+    UDP_SOCKET  client;  // Handle to DHCP client socket
+    UDP_SOCKET  server;  // Handle to DHCP server socket
 	
     S2CSTATE	s2cState;	  // DHCP client state machine variable
     C2SSTATE	c2sState;	  // DHCP server state machine variable
