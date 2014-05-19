@@ -32,15 +32,16 @@ void DHCPRelayInit(void)
 {
     int i;
     // Open a socket to send and receive broadcast messages on
-    DHCPRelay.s2cSocket = UDPOpen(DHCP_CLIENT_PORT, NULL, DHCP_SERVER_PORT);
-    if(DHCPRelay.s2cSocket == INVALID_UDP_SOCKET)
+    DHCPRelay.client = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
+    if(DHCPRelay.client == INVALID_UDP_SOCKET)
         return;
+
     
     
     DHCPRelay.my_ip.Val = AppConfig.MyIPAddr.Val;
     DHCPRelay.router_ip.Val = AppConfig.MyGateway.Val;
-    DHCPRelay.s2cState = SM_IDLE_S;
-    DHCPRelay.c2sState = SM_SEND_ARP;
+    DHCPRelay.s2cState = SM_SEND_ARP;
+    DHCPRelay.c2sState = SM_IDLE;
 	
     DHCPRelay.server_info.IPAddr.byte.LB = SERVER_IP_LB;
     DHCPRelay.server_info.IPAddr.byte.HB = SERVER_IP_HB;
@@ -59,10 +60,32 @@ void ServerToClient(void)
     
 	switch(DHCPRelay.s2cState)
 	{
+		case SM_SEND_ARP:
+			
+			DisplayString(0, "BEFORE_SEND_ARP");
+			ARPResolve(&(DHCPRelay.server_info.IPAddr));
+			DHCPRelay.s2cState = SM_GET_ARP;
+			
+			DisplayString(0, "SEND_ARP2");
+			
+			break;
+			
+		case SM_GET_ARP:
+			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
+				DHCPRelay.server = UDPOpen(DHCP_SERVER_PORT, &DHCPRelay.server_info, DHCP_SERVER_PORT);
+				if(DHCPRelay.server != INVALID_UDP_SOCKET){
+					DHCPRelay.s2cState = SM_IDLE_S;
+					DisplayString(0, "ARP RESOLVED");
+				}
+				else DHCPRelay.s2cState = SM_SEND_ARP;
+			}
+			
+			break;
+
             
 		case SM_IDLE_S: {
 			DisplayString(0, "IDLE_Server_TO_S");
-			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u && UDPIsPutReady(DHCPRelay.c2sSocket) >= 300u)
+			if(UDPIsGetReady(DHCPRelay.server) >= 241u && UDPIsPutReady(DHCPRelay.client) >= 300u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
 			}
@@ -85,7 +108,7 @@ void ServerToClient(void)
             
             DisplayString(0, "CHEKING");
             
-			UDPIsGetReady(DHCPRelay.s2cSocket);
+			UDPIsGetReady(DHCPRelay.server);
 			UDPGetArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
             
 			//Must be a server to client message !
@@ -103,7 +126,7 @@ void ServerToClient(void)
 			if(dw != 0x63538263ul)
 				break;
 			
-			UDPIsPutReady(DHCPRelay.c2sSocket);
+			UDPIsPutReady(DHCPRelay.client);
 			//Forward header
 			UDPPutArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
 			UDPPutArray(message.mac_offset, sizeof(BYTE)*10);
@@ -115,7 +138,7 @@ void ServerToClient(void)
 			//CHECKING TYPE !
 			type = DHCP_UNKNOWN_MESSAGE;
 			do {
-				UDPIsGetReady(DHCPRelay.s2cSocket);
+				UDPIsGetReady(DHCPRelay.server);
 				// Get the Option number
 				// Break out eventually in case if this is a malformed
 				// DHCP message, ie: missing DHCP_END_OPTION marker
@@ -168,7 +191,7 @@ void ServerToClient(void)
 						
 				}
                 
-				UDPIsPutReady(DHCPRelay.c2sSocket);
+				UDPIsPutReady(DHCPRelay.client);
 				UDPPut(option.type);
 				UDPPut(option.len);
 				UDPPutArray(option.content, sizeof(BYTE) * option.len);
@@ -187,7 +210,7 @@ void ServerToClient(void)
 					break;
 			}
             
-			UDPIsPutReady(DHCPRelay.c2sSocket);
+			UDPIsPutReady(DHCPRelay.client);
 			if (!broadcastOptionPresent) {
 				UDPPut(DHCP_BROADCAST_ADRESS);
 				UDPPut(sizeof(IP_ADDR));
@@ -202,7 +225,7 @@ void ServerToClient(void)
 			UDPPut(DHCP_END_OPTION);
 			UDPFlush();
             
-			UDPIsGetReady(DHCPRelay.s2cSocket);
+			UDPIsGetReady(DHCPRelay.server);
 			UDPDiscard();
 			DHCPRelay.s2cState = SM_IDLE_S;
 			DisplayString(0, "END2");
@@ -224,29 +247,10 @@ void ClientToServer(void)
     BYTE content[256];
 	switch(DHCPRelay.c2sState)
 	{
-		case SM_SEND_ARP:
-
-			DisplayString(0, "BEFORE_SEND_ARP");
-			ARPResolve(&(DHCPRelay.server_info.IPAddr));
-			DHCPRelay.c2sState = SM_GET_ARP;
-			DisplayString(0, "SEND_ARP2");
-			break;
-			
-		case SM_GET_ARP:
-			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
-				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, 0);
-				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET){
-					DHCPRelay.c2sState = SM_IDLE;
-					DisplayString(0, "ARP RESOLVED");
-				}
-				else DHCPRelay.c2sState = SM_SEND_ARP;
-			}
-			
-			break;
-			
+					
 		case SM_IDLE:
 			DisplayString(0, "IDLE_CLIENT_TO_S");
-			if(UDPIsGetReady(DHCPRelay.c2sSocket) >= 241u)
+			if(UDPIsGetReady(DHCPRelay.client) >= 241u)
 			{
 				DHCPRelay.c2sState = SM_CHECKING_TYPE;
 			}
@@ -283,7 +287,10 @@ void ClientToServer(void)
 			
             
             // write on serveur side
-			if(UDPIsPutReady(DHCPRelay.s2cSocket) < 300u) break;
+			if(UDPIsPutReady(DHCPRelay.server) < 300u) {
+				UDPSetTxBuffer(0);
+				break;
+			}
 			UDPPutArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
 			UDPPutArray(message.mac_offset, 10);
 			UDPPutArray(message.sname, sizeof(BYTE) * 64 );
@@ -297,7 +304,7 @@ void ClientToServer(void)
 			//i = 0;
 			do {
                 // listen on client side
-                UDPIsPutReady(DHCPRelay.c2sSocket);
+                UDPIsPutReady(DHCPRelay.client);
                 
 				if(!UDPGet(&option.type)) {
 					end = TRUE;
@@ -355,7 +362,7 @@ void ClientToServer(void)
                                 
                                 
                                 
-                                if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
+                                if(UDPIsPutReady(DHCPRelay.client) < 300u) break;
                                 UDPPutArray((BYTE*)&message.header, sizeof(BOOTP_HEADER));
                                 UDPPutArray(message.mac_offset, 10);
                                 UDPPutArray(message.sname, sizeof(message.sname));
@@ -409,7 +416,7 @@ void ClientToServer(void)
                 UDPPutArray(content,option.len);
                 
                 if (!ReplyAck) {
-                    UDPIsPutReady(DHCPRelay.s2cSocket);
+                    UDPIsPutReady(DHCPRelay.server);
                     UDPPut(option.type);
                     UDPPut(option.len);
                     UDPPutArray(content,option.len);
@@ -423,7 +430,7 @@ void ClientToServer(void)
             
             if (!ReplyAck) {
                 UDPDiscard();
-                UDPIsPutReady(DHCPRelay.s2cSocket);
+                UDPIsPutReady(DHCPRelay.server);
             }
             if (!isBroadcast) {
                 option.type = DHCP_BROADCAST_ADRESS;
@@ -449,7 +456,7 @@ void ClientToServer(void)
             UDPFlush();
 			
             if (ReplyAck) {
-                UDPIsPutReady(DHCPRelay.s2cSocket);
+                UDPIsPutReady(DHCPRelay.server);
                 UDPDiscard();
             }
 			DisplayString(0, "END");
@@ -508,7 +515,7 @@ void TimerTask() {
 			
 		case SM_RENEWING:
 			DHCPRelay.DCB[i].smLease = LEASE_REQUESTED;
-			if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300) break;
+			if(UDPIsPutReady(DHCPRelay.server) < 300) break;
 			UDPPut(BOOT_REQUEST);                       // op
 			UDPPut(BOOT_HW_TYPE);                       // htype
 			UDPPut(BOOT_LEN_OF_HW_TYPE);                // hlen

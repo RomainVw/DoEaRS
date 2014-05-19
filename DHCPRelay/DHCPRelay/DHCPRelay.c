@@ -148,17 +148,17 @@ int main(void)
         // This task performs normal stack task including checking
         // for incoming packet, type of packet and calling
         // appropriate stack entity to process it.
-        DisplayString(0, "BEFORE STACK");
+        //DisplayString(0, "BEFORE STACK");
         StackTask();
-        DisplayString(0, "BEFORE TICK");
+        //DisplayString(0, "BEFORE TICK");
 		TickUpdate();
-		DisplayString(0, "BEFORE TIMER");
+		//DisplayString(0, "BEFORE TIMER");
 		TimerTask();
-		DisplayString(0, "BEFORE CLIENT");
+		//DisplayString(0, "BEFORE CLIENT");
 		ClientToServer();
-		DisplayString(0, "BEFORE SERVER");
+		//DisplayString(0, "BEFORE SERVER");
 		ServerToClient();
-		DisplayString(0, "AFTER SERVER");
+		//DisplayString(0, "AFTER SERVER");
         
         // This tasks invokes each of the core stack application tasks
 		//        StackApplications(); //all except dhcp, ping and arp
