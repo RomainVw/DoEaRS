@@ -18,7 +18,7 @@
 #define SERVER_IP_MB 1
 
 #define MAX_OPTION 52
-#define MAX_CONTENT 20
+#define MAX_CONTENT 254
 
 
 typedef enum
@@ -56,7 +56,7 @@ typedef struct _DHCP_CONTROL_BLOCK
 typedef struct {
 	BYTE type;
 	BYTE len;
-	BYTE *content;
+	BYTE content[MAX_CONTENT];
 } DHCP_OPTION;
 
 typedef struct
@@ -67,7 +67,6 @@ typedef struct
 	BYTE file[128];
 	BYTE magic_cookie[4];
 	UINT nb_options;
-	DHCP_OPTION options[MAX_OPTION];
 } DHCP_MESSAGE ;
 
 
@@ -80,10 +79,6 @@ typedef struct
     S2CSTATE	s2cState;	  // DHCP client state machine variable
     C2SSTATE	c2sState;	  // DHCP server state machine variable
     //Some variables for relay
-	
-	//DHCP_MESSAGE s2c_message;
-	DHCP_MESSAGE c2s_message;
-	
 	TICK dwTimer;
 	
 	IP_ADDR my_ip;
