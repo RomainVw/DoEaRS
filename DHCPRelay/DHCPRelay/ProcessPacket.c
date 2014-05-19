@@ -61,7 +61,7 @@ void ServerToClient(void)
 	{
             
 		case SM_IDLE_S: {
-			DisplayString(0, "IDLE_Server_TO_S");
+			//DisplayString(0, "IDLE_Server_TO_S");
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u && UDPIsPutReady(DHCPRelay.c2sSocket) >= 300u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
@@ -222,9 +222,10 @@ void ClientToServer(void)
 	switch(DHCPRelay.c2sState)
 	{
 		case SM_SEND_ARP:
+            DisplayString(0, "SEND_ARP1");
 			ARPResolve(&DHCPRelay.server_info.IPAddr);
 			DHCPRelay.c2sState = SM_GET_ARP;
-			DisplayString(0, "SEND_ARP");
+			DisplayString(0, "SEND_ARP2");
 			break;
 			
 		case SM_GET_ARP:
