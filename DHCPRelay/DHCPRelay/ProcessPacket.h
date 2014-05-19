@@ -37,10 +37,6 @@ typedef enum
 {
 	SM_IDLE_S = 0,
 	SM_CHECKING_TYPE_S,
-	SM_PROCESS_OFFER,
-	SM_PROCESS_ACK,
-	SM_PROCESS_NACK,
-	SM_SEND_S
 } S2CSTATE;
 
 typedef enum
@@ -64,7 +60,7 @@ typedef struct _DHCP_CONTROL_BLOCK
 typedef struct {
 	BYTE type;
 	BYTE len;
-	BYTE content[MAX_CONTENT];
+	BYTE *content;
 } DHCP_OPTION;
 
 typedef struct
@@ -89,7 +85,7 @@ typedef struct
     C2SSTATE	c2sState;	  // DHCP server state machine variable
     //Some variables for relay
 	
-	DHCP_MESSAGE s2c_message;
+	//DHCP_MESSAGE s2c_message;
 	DHCP_MESSAGE c2s_message;
 	
 	TICK dwTimer;
@@ -111,5 +107,9 @@ void ServerToClient(void);
 void ClientToServer(void);
 
 void TimerTask(void);
+
+BOOL record_in_table(BOOTP_HEADER* header, DHCP_CONTROL_BLOCK* dcb, DWORD leaseTime);
+
+BOOL delete_of_table(BOOTP_HEADER * header, DHCP_CONTROL_BLOCK* dcb);
 
 #endif
