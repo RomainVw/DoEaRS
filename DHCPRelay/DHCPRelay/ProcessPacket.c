@@ -246,21 +246,21 @@ void ClientToServer(void)
             DWORD dw;
             
             BYTE type;
-            
+            DHCP_MESSAGE message;
             
 			// Retrieve the BOOTP header
-			UDPGetArray((BYTE *)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
+			UDPGetArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
             
 			//Must be a client to server message !
-			if(DHCPRelay.c2s_message.header.MessageType != BOOT_REQUEST)
+			if(message.header.MessageType != BOOT_REQUEST)
 				break;
             
-			DHCPRelay.c2s_message.header.RelayAgentIP.Val = DHCPRelay.my_ip.Val;
+			message.header.RelayAgentIP.Val = DHCPRelay.my_ip.Val;
 			
             
-			UDPGetArray(DHCPRelay.c2s_message.mac_offset, 10);
-			UDPGetArray(DHCPRelay.c2s_message.sname, 64);
-			UDPGetArray(DHCPRelay.c2s_message.file, 128);
+			UDPGetArray(message.mac_offset, 10);
+			UDPGetArray(message.sname, 64);
+			UDPGetArray(message.file, 128);
 			
 			
 			// Obtain Magic Cookie and verify
@@ -268,16 +268,16 @@ void ClientToServer(void)
 			if(dw != 0x63538263ul)
 				break;
 			
-			DHCPRelay.c2s_message.header.Hops += 1;
+			message.header.Hops += 1;
 			
             
             // write on serveur side
 			if(UDPIsPutReady(DHCPRelay.s2cSocket) < 300u) break;
-			UDPPutArray((BYTE*)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
-			UDPPutArray(DHCPRelay.c2s_message.mac_offset, 10);
-			UDPPutArray(DHCPRelay.c2s_message.sname, sizeof(DHCPRelay.c2s_message.sname));
-			UDPPutArray(DHCPRelay.c2s_message.file, sizeof(DHCPRelay.c2s_message.file));
-			UDPPutArray(DHCPRelay.c2s_message.magic_cookie, sizeof(DHCPRelay.c2s_message.magic_cookie));
+			UDPPutArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
+			UDPPutArray(message.mac_offset, 10);
+			UDPPutArray(message.sname, sizeof(BYTE) * 64 );
+			UDPPutArray(message.file, sizeof(BYTE) * 128);
+			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
             
 			// listen on client side
 			UDPIsPutReady(DHCPRelay.c2sSocket);
@@ -308,7 +308,7 @@ void ClientToServer(void)
                						isKnown = 1;
                 					for(j = 0; j < 6 && isKnown == 1; j++)
                 					{
-                    					if (DHCPRelay.c2s_message.header.ClientMAC.v[j] != DHCPRelay.DCB[clientIndex].ClientMAC.v[j])
+                    					if (message.header.ClientMAC.v[j] != DHCPRelay.DCB[clientIndex].ClientMAC.v[j])
                         					isKnown = 0;
                 					}
                                 }
@@ -323,28 +323,28 @@ void ClientToServer(void)
                                     }
                                     
                                     // Sends ACK message
-                                    DHCPRelay.c2s_message.header.MessageType = BOOT_REPLY;
-                                    DHCPRelay.c2s_message.header.HardwareType = 1;
-                                    DHCPRelay.c2s_message.header.HardwareLen = 6;
+                                    message.header.MessageType = BOOT_REPLY;
+                                    message.header.HardwareType = 1;
+                                    message.header.HardwareLen = 6;
                                     
                                     
-                                    DHCPRelay.c2s_message.header.Hops = 0;
+									message.header.Hops = 0;
                 					//DHCPRelay.c2s_message.header.TransactionID = DHCPRelay.c2s_message.header.TransactionID;
                 					//DHCPRelay.c2s_message.header.BootpFlags = DHCPRelay.c2s_message.header.BootpFlags;
-                					DHCPRelay.c2s_message.header.SecondsElapsed = 0;
+                					message.header.SecondsElapsed = 0;
                 					//DHCPRelay.c2s_message.header.ClientIP.Val = DHCPRelay.c2s_message.header.ClientIP.Val;
-                					DHCPRelay.c2s_message.header.YourIP.Val = DHCPRelay.DCB[clientIndex].ClientIp.Val;
-                					DHCPRelay.c2s_message.header.NextServerIP.Val = DHCPRelay.router_ip.Val;
-                					DHCPRelay.c2s_message.header.RelayAgentIP.Val =  DHCPRelay.my_ip.Val;
+                					message.header.YourIP.Val = DHCPRelay.DCB[clientIndex].ClientIp.Val;
+                					message.header.NextServerIP.Val = DHCPRelay.router_ip.Val;
+                					message.header.RelayAgentIP.Val =  DHCPRelay.my_ip.Val;
                                     
                                     
                                     
                 					if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
-                                    UDPPutArray((BYTE*)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
-                                    UDPPutArray(DHCPRelay.c2s_message.mac_offset, 10);
-                                    UDPPutArray(DHCPRelay.c2s_message.sname, sizeof(DHCPRelay.c2s_message.sname));
-                                    UDPPutArray(DHCPRelay.c2s_message.file, sizeof(DHCPRelay.c2s_message.file));
-                                    UDPPutArray(DHCPRelay.c2s_message.magic_cookie, 4 * sizeof(BYTE));
+                                    UDPPutArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
+                                    UDPPutArray(message.mac_offset, 10);
+                                    UDPPutArray(message.sname, sizeof(BYTE) * 64);
+                                    UDPPutArray(message.file, sizeof(BYTE) *128);
+                                    UDPPutArray(message.magic_cookie, 4 * sizeof(BYTE));
                                     
                                     
                                     UDPPut(DHCP_MESSAGE_TYPE);
