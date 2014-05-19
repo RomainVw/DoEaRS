@@ -224,14 +224,14 @@ void ClientToServer(void)
 		case SM_SEND_ARP:
 
 			DisplayString(0, "BEFORE_SEND_ARP");
-			ARPResolve(&DHCPRelay.server_info.IPAddr);
+			ARPResolve(&(DHCPRelay.server_info.IPAddr));
 			DHCPRelay.c2sState = SM_GET_ARP;
 			DisplayString(0, "SEND_ARP2");
 			break;
 			
 		case SM_GET_ARP:
 			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
-				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, &DHCPRelay.server_info, DHCP_CLIENT_PORT);
+				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
 				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET){
 					DHCPRelay.c2sState = SM_IDLE;
 					DisplayString(0, "ARP RESOLVED");
