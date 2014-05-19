@@ -231,7 +231,7 @@ void ClientToServer(void)
 			
 		case SM_GET_ARP:
 			if(ARPIsResolved(&DHCPRelay.server_info.IPAddr, &DHCPRelay.server_info.MACAddr)) {
-				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, DHCP_CLIENT_PORT);
+				DHCPRelay.c2sSocket = UDPOpen(DHCP_SERVER_PORT, NULL, 0);
 				if(DHCPRelay.c2sSocket != INVALID_UDP_SOCKET){
 					DHCPRelay.c2sState = SM_IDLE;
 					DisplayString(0, "ARP RESOLVED");
