@@ -1,11 +1,14 @@
-//
-//  ProcessPacket.h
-//  DHCPRelay
-//
-//  Created by Ludovic Vannoorenberghe on 17/05/14.
-//  Copyright (c) 2014 Ludovic Vannoorenberghe. All rights reserved.
-//
-
+/*********************************************************************
+ *
+ 
+ * FileName:        DHCPRelay.c
+ * Authors:			Vannoorenberghe Ludovic
+ *					Vanwelde Romain
+ * Date:			19 May 2014
+ * Cours:			LINGI2315
+ * Description:		Fichier contenant les différentes stuctures de données utilisées
+ *					lors du stockage des messages DHCP ainsi que les différents états des State machine.
+ *********************************************************************/
 #ifndef DHCPRelay_ProcessPacket_h
 #define DHCPRelay_ProcessPacket_h
 
@@ -66,7 +69,6 @@ typedef struct
 	BYTE sname[64];
 	BYTE file[128];
 	BYTE magic_cookie[4];
-	UINT nb_options;
 } DHCP_MESSAGE ;
 
 
@@ -79,7 +81,6 @@ typedef struct
     S2CSTATE	s2cState;	  // DHCP client state machine variable
     C2SSTATE	c2sState;	  // DHCP server state machine variable
     //Some variables for relay
-	TICK dwTimer;
 	
 	IP_ADDR my_ip;
 	IP_ADDR router_ip;

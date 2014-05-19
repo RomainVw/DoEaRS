@@ -1,10 +1,17 @@
-//
-//  ProcessPacket.c
-//  DHCPRelay
-//
-//  Created by Ludovic Vannoorenberghe on 9/05/14.
-//  Copyright (c) 2014 Ludovic Vannoorenberghe. All rights reserved.
-//
+/*********************************************************************
+ *
+ 
+ * FileName:        DHCPRelay.c
+ * Authors:			Vannoorenberghe Ludovic
+ *					Vanwelde Romain
+ * Date:			19 May 2014
+ * Cours:			LINGI2315
+ * Description:		Fichier contenant l'essentiel de l'implémentation du relai DHCP,
+					l'initialisation initilise les différentes stuctures de données, 
+					il y a une tache pour le client et une tache pour le serveur.
+					Les 2 dernières fonctions permettent d'ajouter ou de 
+					supprimer un client dans la table
+ *********************************************************************/
 
 #include <stdio.h>
 
@@ -62,11 +69,8 @@ void ServerToClient(void)
 	{
 		case SM_SEND_ARP:
 			
-			DisplayString(0, "BEFORE_SEND_ARP");
 			ARPResolve(&(DHCPRelay.server_info.IPAddr));
 			DHCPRelay.s2cState = SM_GET_ARP;
-			
-			DisplayString(0, "SEND_ARP2");
 			
 			break;
 			
@@ -75,7 +79,6 @@ void ServerToClient(void)
 				DHCPRelay.server = UDPOpen(DHCP_SERVER_PORT, &DHCPRelay.server_info, DHCP_SERVER_PORT);
 				if(DHCPRelay.server != INVALID_UDP_SOCKET){
 					DHCPRelay.s2cState = SM_IDLE_S;
-					DisplayString(0, "ARP RESOLVED");
 				}
 				else DHCPRelay.s2cState = SM_SEND_ARP;
 			}
@@ -84,13 +87,10 @@ void ServerToClient(void)
 
             
 		case SM_IDLE_S: {
-			DisplayString(0, "IDLE_Server_TO_S");
 			if(UDPIsGetReady(DHCPRelay.server) >= 241u && UDPIsPutReady(DHCPRelay.client) >= 300u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
 			}
-			
-			
 			break;
 		}
 			
@@ -106,7 +106,7 @@ void ServerToClient(void)
 			DWORD leaseTime = 0;
 			DHCP_OPTION option;
             
-            DisplayString(0, "CHEKING");
+            DisplayString(0, "CHEKING MESSAGE");
             
 			UDPIsGetReady(DHCPRelay.server);
 			UDPGetArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
@@ -134,7 +134,6 @@ void ServerToClient(void)
 			UDPPutArray(message.file, sizeof(BYTE)*128);
 			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
 			
-			DisplayString(0, "BEFORE LOOP2");
 			//CHECKING TYPE !
 			type = DHCP_UNKNOWN_MESSAGE;
 			do {
@@ -198,14 +197,17 @@ void ServerToClient(void)
 				
                 
 			} while (!end);
-			DisplayString(0, "AFTER LOOP2");
 			switch (type) {
 				case DHCP_ACK_MESSAGE:
+					DisplayString(0, "DHCP ACK");
 					record_in_table(&(message.header), DHCPRelay.DCB, leaseTime);
 					break;
 				case DHCP_NAK_MESSAGE:
+					DisplayString(0, "DHCP NACK");
 					delete_of_table(&(message.header), DHCPRelay.DCB);
 					break;
+				case DHCP_OFFER_MESSAGE:
+					DisplayString(0, "DHCP OFFER");
 				default:
 					break;
 			}
@@ -249,7 +251,7 @@ void ClientToServer(void)
 	{
 					
 		case SM_IDLE:
-			DisplayString(0, "IDLE_CLIENT_TO_S");
+			DisplayString(0, "Waiting for Client");
 			if(UDPIsGetReady(DHCPRelay.client) >= 241u)
 			{
 				DHCPRelay.c2sState = SM_CHECKING_TYPE;
@@ -262,7 +264,7 @@ void ClientToServer(void)
             
             BYTE type;
             DHCP_MESSAGE message;
-            DisplayString(0, "CHEKING");
+            DisplayString(0, "CHEKING MESSAGE");
 			// Retrieve the BOOTP header
 			UDPGetArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
             
@@ -297,8 +299,6 @@ void ClientToServer(void)
 			UDPPutArray(message.file, sizeof(BYTE) * 128);
 			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
             
-            DisplayString(0, "BEFORE LOOP");
-			
 			end = FALSE;
 			type = DHCP_UNKNOWN_MESSAGE;
 			//i = 0;
@@ -325,7 +325,7 @@ void ClientToServer(void)
                     if ( option.len == 1u ){
                         if(*content == DHCP_REQUEST_MESSAGE){
                             int j;
-                            
+                            DisplayString(0, "DHCP_REQUEST");
                             for (clientIndex = 0; clientIndex < DHCP_MAX_LEASES && isKnown == 0; clientIndex++) {
                                 isKnown = 1;
                                 for(j = 0; j < 6 && isKnown == 1; j++)
@@ -503,7 +503,7 @@ void TimerTask() {
 					}
 					DHCPRelay.DCB[i].LeaseExpires = LEASE_TIME;
 				}
-				if (DHCPRelay.DCB[i].RealLeaseTime >= 2ul) {
+				if (DHCPRelay.DCB[i].RealLeaseTime >= 10ul) {
 					DHCPRelay.DCB[i].RealLeaseTime--;
 				}
 				else {

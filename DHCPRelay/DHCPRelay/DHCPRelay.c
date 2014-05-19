@@ -1,11 +1,19 @@
-//
-//  DHCPRelay.c
-//  DHCPRelay
-//
-//  Created by Ludovic Vannoorenberghe on 9/05/14.
-//  Copyright (c) 2014 Ludovic Vannoorenberghe. All rights reserved.
-//
-
+/*********************************************************************
+ *
+ *  Main Application Entry Point and TCP/IP Stack Demo
+ *  Module for Microchip TCP/IP Stack
+ *   -Demonstrates how to call and use the Microchip TCP/IP stack
+ *	 -Reference: AN833
+ *
+ *********************************************************************
+ * FileName:        DHCPRelay.c
+ * Authors:			Vannoorenberghe Ludovic
+ *					Vanwelde Romain
+ * Date:			19 May 2014
+ * Cours:			LINGI2315
+ * Description:		Fichier principal permettant la configuration de la carte ainsi que
+ *					le lancement de différentes taches nécessaires au fonctionnement du relai DHCP.
+ */
 #include <stdio.h>
 
 /*
