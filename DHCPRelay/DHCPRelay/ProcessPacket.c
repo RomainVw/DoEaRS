@@ -61,7 +61,7 @@ void ServerToClient(void)
 	{
             
 		case SM_IDLE_S: {
-			//DisplayString(0, "IDLE_Server_TO_S");
+			DisplayString(0, "IDLE_Server_TO_S");
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u && UDPIsPutReady(DHCPRelay.c2sSocket) >= 300u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
@@ -73,6 +73,7 @@ void ServerToClient(void)
 			
 			
 		case SM_CHECKING_TYPE_S: {
+            
 			DWORD dw;
 			volatile BOOL end = FALSE;
 			BOOL broadcastOptionPresent = FALSE;
@@ -81,6 +82,8 @@ void ServerToClient(void)
 			DHCP_MESSAGE message;
 			DWORD leaseTime = 0;
 			DHCP_OPTION option;
+            
+            DisplayString(0, "CHEKING");
             
 			UDPIsGetReady(DHCPRelay.s2cSocket);
 			UDPGetArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
@@ -108,7 +111,7 @@ void ServerToClient(void)
 			UDPPutArray(message.file, sizeof(BYTE)*128);
 			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
 			
-			
+			DisplayString(0, "BEFORE LOOP2");
 			//CHECKING TYPE !
 			type = DHCP_UNKNOWN_MESSAGE;
 			do {
@@ -172,7 +175,7 @@ void ServerToClient(void)
 				
                 
 			} while (!end);
-			
+			DisplayString(0, "AFTER LOOP2");
 			switch (type) {
 				case DHCP_ACK_MESSAGE:
 					record_in_table(&(message.header), DHCPRelay.DCB, leaseTime);
@@ -202,7 +205,7 @@ void ServerToClient(void)
 			UDPIsGetReady(DHCPRelay.s2cSocket);
 			UDPDiscard();
 			DHCPRelay.s2cState = SM_IDLE_S;
-			
+			DisplayString(0, "END2");
 			break;
 		}
 			
@@ -250,11 +253,12 @@ void ClientToServer(void)
 			else break;
 			
 		case SM_CHECKING_TYPE:{
+            
             DWORD dw;
             
             BYTE type;
             DHCP_MESSAGE message;
-            
+            DisplayString(0, "CHEKING");
 			// Retrieve the BOOTP header
 			UDPGetArray((BYTE*)&(message.header), sizeof(BOOTP_HEADER));
             
@@ -286,6 +290,7 @@ void ClientToServer(void)
 			UDPPutArray(message.file, sizeof(BYTE) * 128);
 			UDPPutArray((BYTE*)&dw, sizeof(DWORD));
             
+            DisplayString(0, "BEFORE LOOP");
 			
 			end = FALSE;
 			type = DHCP_UNKNOWN_MESSAGE;
@@ -414,7 +419,7 @@ void ClientToServer(void)
                 
                 
             } while (!end);
-			
+			DisplayString(0, "AFTER LOOP");
             
             if (!ReplyAck) {
                 UDPDiscard();
@@ -447,7 +452,7 @@ void ClientToServer(void)
                 UDPIsPutReady(DHCPRelay.s2cSocket);
                 UDPDiscard();
             }
-			
+			DisplayString(0, "END");
 			break;
         }
             
