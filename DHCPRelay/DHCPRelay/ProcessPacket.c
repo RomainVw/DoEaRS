@@ -222,6 +222,7 @@ void ClientToServer(void)
 	switch(DHCPRelay.c2sState)
 	{
 		case SM_SEND_ARP:
+			DisplayString(0, "BEFORE_SEND_ARP");
 			ARPResolve(&DHCPRelay.server_info.IPAddr);
 			DHCPRelay.c2sState = SM_GET_ARP;
 			DisplayString(0, "SEND_ARP");

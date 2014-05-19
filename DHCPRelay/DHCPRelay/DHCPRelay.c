@@ -139,7 +139,7 @@ int main(void)
     // job.
     // If a task needs very long time to do its job, it must be broken
     // down into smaller pieces so that other tasks can have CPU time.
-	
+	DHCPDisable(0);
 	
     while(1)
     {
