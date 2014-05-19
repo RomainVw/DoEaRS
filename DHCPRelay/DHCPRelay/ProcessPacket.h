@@ -26,11 +26,7 @@ typedef enum
 	SM_SEND_ARP = 0,
 	SM_GET_ARP,
 	SM_IDLE,
-	SM_CHECKING_TYPE,
-	SM_PROCESS_DISCOVER,
-	SM_PROCESS_REQUEST,
-	SM_PROCESS_DECLINE,
-	SM_SEND
+	SM_CHECKING_TYPE
 } C2SSTATE;
 
 typedef enum
@@ -64,7 +60,7 @@ typedef struct _DHCP_CONTROL_BLOCK
 typedef struct {
 	BYTE type;
 	BYTE len;
-	BYTE content[MAX_CONTENT];
+	BYTE *content;
 } DHCP_OPTION;
 
 typedef struct
