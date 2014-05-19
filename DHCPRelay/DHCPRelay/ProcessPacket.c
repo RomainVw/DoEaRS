@@ -40,7 +40,7 @@ void DHCPRelayInit(void)
     DHCPRelay.my_ip.Val = AppConfig.MyIPAddr.Val;
     DHCPRelay.router_ip.Val = AppConfig.MyGateway.Val;
     DHCPRelay.s2cState = SM_IDLE_S;
-    DHCPRelay.c2sState = SM_IDLE;
+    DHCPRelay.c2sState = SM_SEND_ARP;
 	
     DHCPRelay.server_info.IPAddr.byte.LB = SERVER_IP_LB;
     DHCPRelay.server_info.IPAddr.byte.HB = SERVER_IP_HB;
@@ -61,6 +61,7 @@ void ServerToClient(void)
 	{
             
 		case SM_IDLE_S: {
+			DisplayString(0, "IDLE_Server_TO_S");
 			if(UDPIsGetReady(DHCPRelay.s2cSocket) >= 241u && UDPIsPutReady(DHCPRelay.c2sSocket) >= 300u)
 			{
 				DHCPRelay.s2cState = SM_CHECKING_TYPE_S;
@@ -239,6 +240,7 @@ void ClientToServer(void)
 			break;
 			
 		case SM_IDLE:
+			DisplayString(0, "IDLE_CLIENT_TO_S");
 			if(UDPIsGetReady(DHCPRelay.c2sSocket) >= 241u)
 			{
 				DHCPRelay.c2sState = SM_CHECKING_TYPE;
