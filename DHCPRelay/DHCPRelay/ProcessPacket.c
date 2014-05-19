@@ -56,7 +56,7 @@ void DHCPRelayInit(void)
 
 void ServerToClient(void)
 {
-
+    
 	switch(DHCPRelay.s2cState)
 	{
             
@@ -80,7 +80,7 @@ void ServerToClient(void)
 			DHCP_MESSAGE message;
 			DWORD leaseTime = 0;
 			DHCP_OPTION option;
-
+            
 			UDPIsGetReady(DHCPRelay.s2cSocket);
 			UDPGetArray((BYTE *)&(message.header), sizeof(BOOTP_HEADER));
             
@@ -90,7 +90,7 @@ void ServerToClient(void)
 			//Modify the header
 			message.header.RelayAgentIP.Val = DHCPRelay.my_ip.Val;
 			message.header.Hops += 1;
-
+            
 			UDPGetArray(message.mac_offset, 10);
 			UDPGetArray(message.sname, 64);
 			UDPGetArray(message.file, 128);
@@ -165,13 +165,13 @@ void ServerToClient(void)
 						break;
 						
 				}
-
+                
 				UDPIsPutReady(DHCPRelay.c2sSocket);
 				UDPPut(option.type);
 				UDPPut(option.len);
 				UDPPutArray(option.content, sizeof(BYTE) * option.len);
 				
-
+                
 			} while (!end);
 			
 			switch (type) {
@@ -184,7 +184,7 @@ void ServerToClient(void)
 				default:
 					break;
 			}
-
+            
 			UDPIsPutReady(DHCPRelay.c2sSocket);
 			if (!broadcastOptionPresent) {
 				UDPPut(DHCP_BROADCAST_ADRESS);
@@ -195,11 +195,11 @@ void ServerToClient(void)
 				UDPPut(DHCP_ROUTER);
 				UDPPut(sizeof(IP_ADDR));
 				UDPPutArray(DHCPRelay.router_ip.v, sizeof(IP_ADDR));
-
+                
 			}
 			UDPPut(DHCP_END_OPTION);
 			UDPFlush();
-
+            
 			UDPIsGetReady(DHCPRelay.s2cSocket);
 			UDPDiscard();
 			DHCPRelay.s2cState = SM_IDLE_S;
@@ -281,12 +281,14 @@ void ClientToServer(void)
 			UDPPutArray(DHCPRelay.c2s_message.file, sizeof(DHCPRelay.c2s_message.file));
 			UDPPutArray(DHCPRelay.c2s_message.magic_cookie, sizeof(DHCPRelay.c2s_message.magic_cookie));
             
-			// listen on client side
-			UDPIsPutReady(DHCPRelay.c2sSocket);
+			
 			end = FALSE;
 			type = DHCP_UNKNOWN_MESSAGE;
 			//i = 0;
 			do {
+                // listen on client side
+                UDPIsPutReady(DHCPRelay.c2sSocket);
+                
 				if(!UDPGet(&option.type)) {
 					end = TRUE;
 					break;
@@ -296,76 +298,75 @@ void ClientToServer(void)
 					break;
 				}
 				UDPGet(&option.len);       // Get option len
-				{
-					
-					UDPGetArray(content, option.len);
-                    
-            	    if (option.type == DHCP_MESSAGE_TYPE) {
-                	    // Len must be 1.
-                    	if ( option.len == 1u ){
-                        	if(*content == DHCP_REQUEST_MESSAGE){
-                        		int j;
-                                
-            					for (clientIndex = 0; clientIndex < DHCP_MAX_LEASES && isKnown == 0; clientIndex++) {
-               						isKnown = 1;
-                					for(j = 0; j < 6 && isKnown == 1; j++)
-                					{
-                    					if (DHCPRelay.c2s_message.header.ClientMAC.v[j] != DHCPRelay.DCB[clientIndex].ClientMAC.v[j])
-                        					isKnown = 0;
-                					}
+                
+                
+                UDPGetArray(content, option.len);
+                
+                if (option.type == DHCP_MESSAGE_TYPE) {
+                    // Len must be 1.
+                    if ( option.len == 1u ){
+                        if(*content == DHCP_REQUEST_MESSAGE){
+                            int j;
+                            
+                            for (clientIndex = 0; clientIndex < DHCP_MAX_LEASES && isKnown == 0; clientIndex++) {
+                                isKnown = 1;
+                                for(j = 0; j < 6 && isKnown == 1; j++)
+                                {
+                                    if (DHCPRelay.c2s_message.header.ClientMAC.v[j] != DHCPRelay.DCB[clientIndex].ClientMAC.v[j])
+                                        isKnown = 0;
                                 }
-                                if (isKnown){
-                                    
-                                    
-                                                                       
-                					ReplyAck = 1;
-                                    // The remaining lease time is not sufficient
-                                    if (DHCPRelay.DCB[clientIndex].RealLeaseTime < 20){
-             						 	DHCPRelay.c2sState = SM_IDLE;
-                                    }
-                                    
-                                    // Sends ACK message
-                                    DHCPRelay.c2s_message.header.MessageType = BOOT_REPLY;
-                                    DHCPRelay.c2s_message.header.HardwareType = 1;
-                                    DHCPRelay.c2s_message.header.HardwareLen = 6;
-                                    
-                                    
-                                    DHCPRelay.c2s_message.header.Hops = 0;
-                					//DHCPRelay.c2s_message.header.TransactionID = DHCPRelay.c2s_message.header.TransactionID;
-                					//DHCPRelay.c2s_message.header.BootpFlags = DHCPRelay.c2s_message.header.BootpFlags;
-                					DHCPRelay.c2s_message.header.SecondsElapsed = 0;
-                					//DHCPRelay.c2s_message.header.ClientIP.Val = DHCPRelay.c2s_message.header.ClientIP.Val;
-                					DHCPRelay.c2s_message.header.YourIP.Val = DHCPRelay.DCB[clientIndex].ClientIp.Val;
-                					DHCPRelay.c2s_message.header.NextServerIP.Val = DHCPRelay.router_ip.Val;
-                					DHCPRelay.c2s_message.header.RelayAgentIP.Val =  DHCPRelay.my_ip.Val;
-                                    
-                                    
-                                    
-                					if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
-                                    UDPPutArray((BYTE*)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
-                                    UDPPutArray(DHCPRelay.c2s_message.mac_offset, 10);
-                                    UDPPutArray(DHCPRelay.c2s_message.sname, sizeof(DHCPRelay.c2s_message.sname));
-                                    UDPPutArray(DHCPRelay.c2s_message.file, sizeof(DHCPRelay.c2s_message.file));
-                                    UDPPutArray(DHCPRelay.c2s_message.magic_cookie, 4 * sizeof(BYTE));
-                                    
-                                    
-                                    UDPPut(DHCP_MESSAGE_TYPE);
-                                    UDPPut(sizeof(BYTE));
-                                    UDPPut(DHCP_ACK_MESSAGE);
+                            }
+                            if (isKnown){
+                                
+                                
+                                
+                                ReplyAck = 1;
+                                // The remaining lease time is not sufficient
+                                if (DHCPRelay.DCB[clientIndex].RealLeaseTime < 20){
+                                    DHCPRelay.c2sState = SM_IDLE;
                                 }
                                 
+                                // Sends ACK message
+                                DHCPRelay.c2s_message.header.MessageType = BOOT_REPLY;
+                                DHCPRelay.c2s_message.header.HardwareType = 1;
+                                DHCPRelay.c2s_message.header.HardwareLen = 6;
+                                
+                                
+                                DHCPRelay.c2s_message.header.Hops = 0;
+                                //DHCPRelay.c2s_message.header.TransactionID = DHCPRelay.c2s_message.header.TransactionID;
+                                //DHCPRelay.c2s_message.header.BootpFlags = DHCPRelay.c2s_message.header.BootpFlags;
+                                DHCPRelay.c2s_message.header.SecondsElapsed = 0;
+                                //DHCPRelay.c2s_message.header.ClientIP.Val = DHCPRelay.c2s_message.header.ClientIP.Val;
+                                DHCPRelay.c2s_message.header.YourIP.Val = DHCPRelay.DCB[clientIndex].ClientIp.Val;
+                                DHCPRelay.c2s_message.header.NextServerIP.Val = DHCPRelay.router_ip.Val;
+                                DHCPRelay.c2s_message.header.RelayAgentIP.Val =  DHCPRelay.my_ip.Val;
+                                
+                                
+                                
+                                if(UDPIsPutReady(DHCPRelay.c2sSocket) < 300u) break;
+                                UDPPutArray((BYTE*)&DHCPRelay.c2s_message.header, sizeof(BOOTP_HEADER));
+                                UDPPutArray(DHCPRelay.c2s_message.mac_offset, 10);
+                                UDPPutArray(DHCPRelay.c2s_message.sname, sizeof(DHCPRelay.c2s_message.sname));
+                                UDPPutArray(DHCPRelay.c2s_message.file, sizeof(DHCPRelay.c2s_message.file));
+                                UDPPutArray(DHCPRelay.c2s_message.magic_cookie, 4 * sizeof(BYTE));
+                                
+                                
+                                UDPPut(DHCP_MESSAGE_TYPE);
+                                UDPPut(sizeof(BYTE));
+                                UDPPut(DHCP_ACK_MESSAGE);
                             }
                             
-                            
-                        } else{
-                            UDPDiscard(); // Packet not correct
                         }
                         
+                        
+                    } else{
+                        UDPDiscard(); // Packet not correct
                     }
                     
-                    if (ReplyAck)
-                    {
-                        switch (option.type){
+                }
+                
+                
+                switch (option.type){
                     case DHCP_BROADCAST_ADRESS:
                         isBroadcast = 1;
                         memcpy(content,&DHCPRelay.broadcast_adress, sizeof(BYTE) * 4);
@@ -385,40 +386,40 @@ void ClientToServer(void)
                         content[0] = (MIN(LEASE_TIME, DHCPRelay.DCB[clientIndex].LeaseExpires)) & 0xFF;
                     default:
                         break;
-                        }
-                        
-                        UDPPut(option.type);
-                        UDPPut(option.len);
-                        UDPPutArray(content,option.len);
-                        
-                    }
-                    
-    
-                    
-                    
                 }
-
                 
-                
-                UDPIsPutReady(DHCPRelay.s2cSocket);
                 UDPPut(option.type);
                 UDPPut(option.len);
                 UDPPutArray(content,option.len);
                 
-        } while (!end);
+                if (!ReplyAck) {
+                    UDPIsPutReady(DHCPRelay.s2cSocket);
+                    UDPPut(option.type);
+                    UDPPut(option.len);
+                    UDPPutArray(content,option.len);
+                }
+                
+                
+                
+                
+            } while (!end);
 			
-			if (!isBroadcast) {
+            
+            if (!ReplyAck) {
+                UDPDiscard();
+                UDPIsPutReady(DHCPRelay.s2cSocket);
+            }
+            if (!isBroadcast) {
                 option.type = DHCP_BROADCAST_ADRESS;
-				option.len = 4;
-				memcpy(content, &DHCPRelay.broadcast_adress, 4);
-				
-				
+                option.len = 4;
+                memcpy(content, &DHCPRelay.broadcast_adress, 4);
+                
+                
                 UDPPut(option.type);
                 UDPPut(option.len);
-                UDPPutArray(content,
-                            option.len);
-			}
-			if (!isRouter) {
+                UDPPutArray(content, option.len);
+            }
+            if (!isRouter) {
                 option.type = DHCP_ROUTER;
                 memcpy(content, &DHCPRelay.router_ip, sizeof(BYTE) * 4);
                 option.len = 4u;
@@ -428,12 +429,17 @@ void ClientToServer(void)
                 UDPPutArray(content,option.len);
                 
             }
-            
-			UDPDiscard();
+            UDPPut(DHCP_END_OPTION);
+            UDPFlush();
+			
+            if (ReplyAck) {
+                UDPIsPutReady(DHCPRelay.s2cSocket);
+                UDPDiscard();
+            }
 			
 			break;
-    }
-    
+        }
+            
     }
 }
 
